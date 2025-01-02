@@ -1,3 +1,8 @@
+## Original 09
+The goal of this visualization is to depict the frequency and intensity of government-targeted conflicts in five African states (Democratic Republic of the Congo, Egypt, Nigeria, Somalia, and South Africa) from 1990 to 2018. The heatmap uses varying shades of blue to represent the number of conflicts, with darker shades indicating higher conflict intensity. It highlights extended periods of conflict in specific countries, such as Nigeria and South Africa, while also allowing for a comparative view of conflict trends across the selected nations and years.
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/c6e0512e-289e-453b-9e49-4e182c20fc44" />
+
 ## Original 08 
 The visualization represents the number of conflicts in African countries, grouped by regions (Western, Northern, Eastern, Central, and Southern Africa) in a treemap format. The size of each country’s block corresponds to the relative number of conflicts it has experienced from 1990 to 2018, highlighting countries with the highest conflict counts, such as Nigeria in Western Africa and South Africa in Southern Africa. This layout allows for an intuitive comparison of conflict prevalence both within and across regions.
 
