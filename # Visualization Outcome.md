@@ -1,3 +1,44 @@
+# Data Visualization Portfolio for PPOL 6902-02
+
+## Welcome to my portfolio for the Data Visualization (PPOL 6902-02) class, taught by Professor Joe Wesley. This repository is organized into three sections:
+1. A data story that delves into Nigerian conflicts, showcasing insights derived from a detailed analysis.
+2. Original data visualizations created to explore patterns in African conflicts.
+3. Replications of textbook visualizations, demonstrating my ability to recreate professional-grade charts.
+
+For the first two sections, I primarily utilized the Social Conflict Analysis Database (SCAD), the most comprehensive dataset on conflicts in Africa, to generate meaningful and visually engaging insights.
+
+## Section 1: Data Story - A Deeper Look into Nigerian Security Landscape
+
+### Introduction
+Nigeria, the most populous country in Africa with over 200 million people, is rich in diversity, resources, and culture. As the second-largest economy on the continent, Nigeria plays a pivotal role in Africa's economic narrative, driven by its vast mineral and oil resources. However, Nigeria also faces significant challenges, being one of the most conflict-prone nations in the region. This data story delves deeper into Nigeria's security landscape to provide a detailed analysis.
+
+### Key Insights
+1️⃣ If Not Government Conflict, Then What?
+
+Nigeria has experienced the highest number of conflicts in Africa, according to the Social Conflict Analysis Database (SCAD) Africa 2018 dataset.
+
+Overall Conflicts vs. Government-Targeted Conflicts:
+Both conflict types have dramatically increased since 2010.
+However, government-targeted conflicts have not risen proportionally to the overall trend.
+
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/b7dec06c-8407-40d1-9183-29b3ff28ea5d" />
+
+2️⃣ Non-State Conflicts: Frequency and Fatalities
+
+Using the UNDP Non-state Conflict Dataset, we can analyze the frequency and fatality of non-state conflicts in Nigeria. The graph indicates a significant rise in non-state conflicts post-2010. Although the UNDP data captures an increase in the frequency of these conflicts, it does not show a radical rise. However, by plotting the highest estimated fatalities for each year, we find that the conflicts between 1999 and 2004 were the deadliest. 
+
+<NEED TO REGENERATE > 
+
+3️⃣ Who Are the Main Parties in Non-State Conflicts?
+Prominent groups involved in non-state conflicts (1995–2022):
+Ethnic Groups: Christian Yoruba, Muslim Hausa, and Tiv.
+Criminal Groups: Black Axe (evolved from a fraternity into organized crime) and Eyie ('bird' in Yoruba).
+
+<NEED TO REGENERATE > 
+
+
+## Section 2: Nine Original Visualizations (in reverse order)
+
 ## Original 09
 The goal of this visualization is to depict the frequency and intensity of government-targeted conflicts in five African states (Democratic Republic of the Congo, Egypt, Nigeria, Somalia, and South Africa) from 1990 to 2018. The heatmap uses varying shades of blue to represent the number of conflicts, with darker shades indicating higher conflict intensity. It highlights extended periods of conflict in specific countries, such as Nigeria and South Africa, while also allowing for a comparative view of conflict trends across the selected nations and years.
 
@@ -54,7 +95,7 @@ despite near-average conflicts. This discrepancy yields further areas of examina
 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/f616981c-1af2-4cfa-8cae-04e557180d5b" />
 
-
+## Section 3 - Text book visualization 
 ## Replication 02 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/e8ec5fad-c671-4316-83cd-019d8d854d19" />
 
