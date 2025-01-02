@@ -1,0 +1,28 @@
+#Original 4
+
+library(readr)
+library(ggplot2)
+library(dplyr)
+
+# Read the CSV file
+SCAD2018Africa_Final <- read_csv("C:/Users/yeji/Desktop/Data Viz/# Portfolio Data/SCAD2018Africa_Final.csv")
+View(SCAD2018Africa_Final)
+
+# Filter data for Nigeria 
+filtered_data <- SCAD2018Africa_Final %>%
+  filter(countryname == "Nigeria") %>%
+  group_by(eyr) %>%
+  summarise(totalconflicts = n(),
+            government_conflicts = sum(cgovtarget == 1))
+
+# Plotting
+ggplot() +
+  geom_bar(data = filtered_data, aes(x = eyr, y = totalconflicts, fill = "Total Conflicts"), stat = "identity", position = "identity") +
+  geom_bar(data = filtered_data, aes(x = eyr, y = government_conflicts, fill = "Government Conflicts"), 
+           stat = "identity", position = "identity") +
+  scale_fill_manual(values = c("Total Conflicts" = "gray", "Government Conflicts" = "salmon")) +
+  labs(x = "Year", y = "Number of Conflicts", 
+       title = "Government Targeted vs Total Conflicts in Nigeria 1990-2018",
+       caption = "Source: SCAD 2018 Africa Dataset | Yeji KIM") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(min(filtered_data$eyr), max(filtered_data$eyr), by = 5))
