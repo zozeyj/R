@@ -21,18 +21,19 @@ Overall Conflicts vs. Government-Targeted Conflicts:
 Both conflict types have dramatically increased since 2010.
 However, government-targeted conflicts have not risen proportionally to the overall trend.
 
-<img width="800" alt="image" src="https://github.com/user-attachments/assets/b7dec06c-8407-40d1-9183-29b3ff28ea5d" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/b7dec06c-8407-40d1-9183-29b3ff28ea5d" />
 
 2️⃣ Non-State Conflicts: Frequency and Fatalities
 
 Using the UNDP Non-state Conflict Dataset, we can analyze the frequency and fatality of non-state conflicts in Nigeria. The graph indicates a significant rise in non-state conflicts post-2010. Although the UNDP data captures an increase in the frequency of these conflicts, it does not show a radical rise. However, by plotting the highest estimated fatalities for each year, we find that the conflicts between 1999 and 2004 were the deadliest. 
 
-<img width="800" alt="image" src="https://github.com/user-attachments/assets/a5efee4c-384f-4668-9363-1925fce40b35" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/a5efee4c-384f-4668-9363-1925fce40b35" />
 
 3️⃣ Who Are the Main Parties in Non-State Conflicts?
 Now that we have established the significant impact of non-state conflicts on Nigerian security, one might ask: Who is involved in these conflicts? The accompanying graph, which uses a black background for emphasis, utilizes the UNDP dataset to identify the two main parties in each non-state conflict from 1995 to 2022. The size of the letters indicates the frequency of their involvement in conflicts. The results show that the Christian Yoruba, Muslim Hausa, and Tiv ethnic groups were predominantly engaged.
 
-<NEED TO REGENERATE > 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/112b7013-13f9-4740-a3ef-6ec6ccb1cd26" />
+
 
 Black Axe, originally a Nigerian fraternity founded in 1977 that evolved into an organized crime group, and Eyie—meaning 'bird' in Yoruba—also initially a student cofraternity, have become prominent players. These findings align with the subsequent waffle chart. By categorizing non-state conflicts into three types—paramilitary, political, and ethnic—we observe that from 2015 to 2022, the majority, if not all, of the conflicts in Nigeria were ethnic in nature.
 
