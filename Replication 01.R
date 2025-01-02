@@ -1,3 +1,6 @@
+#Data Visualization Replication 1
+#goal - does murder and burglary go together by State?
+
 library(readxl)
 library(ggplot2)
 ggplot(data = crimeRatesByState2005,
