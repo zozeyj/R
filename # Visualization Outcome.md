@@ -1,4 +1,14 @@
-##
+## Original 08 
+The visualization represents the number of conflicts in African countries, grouped by regions (Western, Northern, Eastern, Central, and Southern Africa) in a treemap format. The size of each country’s block corresponds to the relative number of conflicts it has experienced from 1990 to 2018, highlighting countries with the highest conflict counts, such as Nigeria in Western Africa and South Africa in Southern Africa. This layout allows for an intuitive comparison of conflict prevalence both within and across regions.
+
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/80845954-30e2-418d-8e6e-46ddc39e09cc" />
+
+## Original 07
+The visualization aims to illustrate the duration of government-targeted conflicts in Africa from 1990 to 2018, showing how long conflicts tend to last over the years. The main finding is that the majority of conflicts terminate within 25 days, indicating a trend of relatively short-lived government-targeted conflicts. 
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/2bafd7a4-b818-4a79-995f-7c7fa2e7becf" />
+
+
 ## Original 06
 Original 6 compares the cases of conflict in Nigeria and Mali at the same time. 
 It shows that even though Mali has a higher percentage of conflict targeting the central government, overall conflict has been higher in Nigeria over the years.
