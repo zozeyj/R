@@ -36,6 +36,8 @@ Now that we have established the significant impact of non-state conflicts on Ni
 
 Black Axe, originally a Nigerian fraternity founded in 1977 that evolved into an organized crime group, and Eyie—meaning 'bird' in Yoruba—also initially a student cofraternity, have become prominent players. These findings align with the subsequent waffle chart. By categorizing non-state conflicts into three types—paramilitary, political, and ethnic—we observe that from 2015 to 2022, the majority, if not all, of the conflicts in Nigeria were ethnic in nature.
 
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/55184254-9d40-4503-a9e1-e7990e672faf" />
+
 ## Section 2: Nine Original Visualizations (in reverse order)
 
 ## Original 09
