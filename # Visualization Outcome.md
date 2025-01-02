@@ -1,4 +1,13 @@
+## Original 04
+From the third original visualization, it was found that Nigeria had extended years of government-targeted conflict. 
+This visualization demonstrates two bar graphs that contain the total number of conflicts and mark how much of the conflict was
+government targeted. It proves a relative proportion of the government-targeted conflict.
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/d54f0f7c-0311-4c3e-92d5-e8158f8c68bc" />
 
+## Original 03
+The graph maps the government-targeted conflict of each country in Africa from 1980 to 2018. The visualization
+delivers which countries had sustained government-targeted conflicts and differentiates them by color and intensity of color.
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/5898eef0-2a2f-4afc-a63e-92ed0b13e3dc" />
 
 ## Original 02 
 The purpose of this data visualization is to demonstrate a correlation between the number of
@@ -6,8 +15,7 @@ fatalities caused by the non-state conflict in Sudan, the most conflict-ridden c
 Africa, from 1987 to 2022. Combining the three types of non-state conflict (paramilitary, political
 conflict, and identity-based conflict), the visualization shows that the higher the number of disputes
 is, the number of deaths tends to be higher, except in 1993 when the highest number of deaths
-despite near average conflicts. This discrepancy yields further areas of examination.
-
+despite near-average conflicts. This discrepancy yields further areas of examination.
 <img width="600" alt="image" src="https://github.com/user-attachments/assets/49f3dade-7982-450c-a467-f681fed9bae8" />
 
 ## Original 01
