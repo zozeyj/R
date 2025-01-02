@@ -1,0 +1,27 @@
+#Original 06
+
+# Load libraries
+library(readr)
+library(ggplot2)
+library(dplyr)
+# Read the CSV file
+SCAD2018Africa_Final <- read_csv("C:/Users/yeji/Desktop/Data Viz/#
+Portfolio Data/SCAD2018Africa_Final.csv")
+# Filter data for specified countries
+countries <- c( "Mali", "Nigeria")
+filtered_data <- SCAD2018Africa_Final %>%
+filter(countryname %in% countries) %>%
+group_by(countryname, eyr) %>%
+summarise(totalconflicts = n(),
+
+government_conflicts = sum(cgovtarget == 1))
+
+# Plot trend line graph
+ggplot(filtered_data, aes(x = eyr, y = totalconflicts, color =
+countryname)) +
+geom_line() +
+geom_point() +
+labs(title = "Conflicts in Mali and Nigeria from 1990-2022",
+x = "Year",
+y = "Total Number of Conflicts") +
+theme_minimal()
