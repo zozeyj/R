@@ -1,4 +1,6 @@
 #Data Visualization 1
+#Goal - map out whether there is a correlation between days of conflict and fatality in all conflicts in Africa 
+
 library(readr)
 SCAD2018Africa_Final <- read_csv("SCAD2018Africa_Final.csv")
 View(SCAD2018Africa_Final)
