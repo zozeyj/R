@@ -1,0 +1,129 @@
+# Load the ACLED dataset using read.csv
+acled <- read.csv("Documents/2024 Peloria/1. X Conflict Data/Africa_1997-2024_Nov08.csv", header = TRUE)
+
+# Preview the data
+head(acled)
+
+# Install remotes if not already installed 
+if (!requireNamespace("remotes", quietly = TRUE)) {
+  install.packages("remotes")
+}
+
+# Install rnaturalearthhires from GitHub
+remotes::install_github("ropensci/rnaturalearthhires")
+
+install.packages(c("lubridate", "rnaturalearthhires", "rnaturalearth", "rnaturalearthdata", 
+                   "dplyr", "janitor", "stringdist", "shiny", "leaflet", "leaflet.extras", 
+                   "fuzzyjoin", "sf", "ggplot2", "forecast"))
+
+required_packages <- c(
+  "lubridate", "rnaturalearth", "rnaturalearthdata", 
+  "dplyr", "janitor", "stringdist", "shiny", 
+  "leaflet", "leaflet.extras", "fuzzyjoin", 
+  "sf", "ggplot2", "forecast"
+)
+
+# Install missing packages
+install.packages(setdiff(required_packages, installed.packages()[, "Package"]))
+
+# Load the libraries
+lapply(required_packages, library, character.only = TRUE)
+
+install.packages("dtmapi")
+library(dtmapi)
+
+library(lubridate)
+library(rnaturalearthhires)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(dplyr)
+library(janitor)
+library(stringdist)
+library(shiny)
+library(leaflet)
+library(leaflet.extras)
+library(fuzzyjoin)
+library(sf)
+library(ggplot2)
+library(forecast)
+
+admin1 <- ne_states(country = "Democratic Republic of the Congo", returnclass = "sf")
+
+
+# Get IDP Admin 1 Data for the Democratic Republic of the Congo (DRC) for all reporting dates
+idp_admin1_df <- get_idp_admin1_data(CountryName = 'Democratic Republic of the Congo')
+
+# Display the first few rows of the data frame
+head(idp_admin1_df)
+
+#############
+
+# Check the first few rows of the event_date column
+head(acled$event_date)
+
+# Check the structure of the event_date column
+str(acled$event_date)
+
+# Process the acled dataset: Convert event_date to Date and extract month-year
+# Directly convert event_date to Date and extract month_year
+acled_1 <- acled %>%
+  mutate(
+    event_date = as.Date(event_date, format = "%Y-%m-%d"),  # Convert to Date type
+    month_year = format(event_date, "%Y-%m")               # Extract year-month
+  )
+
+# Check the first few rows of the updated dataset
+head(acled_1)
+
+# Check column names in idp_admin1_df
+colnames(idp_admin1_df)
+# Process the idp_admin1_df dataset: Convert reportingDate to Date and extract month-year
+idp_admin1_df_1 <- idp_admin1_df %>%
+  mutate(
+    reporting_date = as.Date(reportingDate),  # Use the correct column name
+    month_year = format(reporting_date, "%Y-%m")  # Extract year-month
+  )
+
+# Check the first few rows of the updated dataset
+head(idp_admin1_df_1)
+
+# Aggregate events in acled_1 by month_year
+acled_monthly <- acled_1 %>%
+  group_by(month_year) %>%
+  summarize(event_count = n(), .groups = "drop")
+
+# Aggregate IDP data by month_year
+idp_monthly <- idp_admin1_df_1 %>%
+  group_by(month_year) %>%
+  summarize(total_idps = sum(numPresentIdpInd, na.rm = TRUE), .groups = "drop")
+
+# Check the result
+head(idp_monthly)
+
+# Merge the two datasets by month_year
+merged_data <- left_join(acled_monthly, idp_monthly, by = "month_year")
+
+# Remove rows with NA in either event_count or total_idps
+merged_data_clean <- merged_data %>%
+  filter(!is.na(event_count) & !is.na(total_idps))
+
+# Calculate correlation between event count and total IDPs (now with complete data)
+if(nrow(merged_data_clean) > 0) {
+  correlation <- cor(merged_data_clean$event_count, merged_data_clean$total_idps, use = "complete.obs")
+  print(paste("Correlation between event count and IDPs: ", round(correlation, 2)))
+} else {
+  print("No complete data available for correlation calculation.")
+}
+
+# Plot the correlation using ggplot2
+ggplot(merged_data_clean, aes(x = event_count, y = total_idps)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "red", se = FALSE) +
+  labs(title = "Correlation between Monthly Conflict Events and IDPs",
+       x = "Number of Monthly Events (ACLED)",
+       y = "Number of IDPs (IDP Data)") +
+  theme_minimal()
+
+# Statistical significane
+correlation_test <- cor.test(merged_data_clean$event_count, merged_data_clean$total_idps)
+print(correlation_test)
