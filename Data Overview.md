@@ -43,7 +43,11 @@ sample estimates: cor 0.6424714
 
 ## 4. Time Series Analysis
 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/2f538167-fc79-46bd-940e-3292ee0fd582" />
 
 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/9e2708fe-c314-4172-a624-ce46a7cb5516" />
+
+Findings: both total number of internally displaced people and the number of conflicts is closely related to the observation at the t-1 (the month before) timestamp. 
 
 
