@@ -1,0 +1,73 @@
+# Load necessary libraries
+library(shiny)
+library(leaflet)
+library(leaflet.extras)
+library(dplyr)
+library(readr)
+
+# Load the ACLED dataset using read.csv
+acled <- read.csv("Documents/2024 Peloria/1. X Conflict Data/Africa_1997-2024_Nov08.csv", header = TRUE)
+
+# Filter ACLED data for the Democratic Republic of the Congo (DRC)
+acled_drc <- acled %>%
+  filter(country == "Democratic Republic of Congo") %>%
+  select(event_date, latitude, longitude)
+
+# Extract the year from the event_date column
+acled_drc <- acled_drc %>%
+  mutate(event_date = as.Date(event_date, format = "%Y-%m-%d"),
+         year = format(event_date, "%Y"))
+
+# UI
+ui <- fluidPage(
+  titlePanel("Conflict Heatmap for DRC (ACLED Data)"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(
+        inputId = "year",
+        label = "Select Year",
+        choices = unique(acled_drc$year),
+        selected = min(acled_drc$year),
+        multiple = FALSE
+      )
+    ),
+    mainPanel(
+      leafletOutput("conflict_heatmap")
+    )
+  )
+)
+
+# Server
+server <- function(input, output, session) {
+  output$conflict_heatmap <- renderLeaflet({
+    selected_year <- as.integer(input$year)
+    
+    # Filter ACLED data for the selected year
+    acled_year <- acled_drc %>% filter(year == selected_year)
+    
+    # Create Leaflet map
+    leaflet() %>%
+      addTiles() %>%
+      
+      # Add conflict heatmap
+      addHeatmap(
+        data = acled_year,
+        lng = ~longitude, lat = ~latitude,
+        intensity = ~1,  # Each event counts equally
+        radius = 25,     # Adjust radius for clustering
+        blur = 15,       # Adjust blur for smoothness
+        max = 1,         # Adjust max intensity
+        group = "Conflict Heatmap"
+      ) %>%
+      
+      # Add layers control
+      addLayersControl(
+        overlayGroups = c("Conflict Heatmap"),
+        options = layersControlOptions(collapsed = FALSE)
+      )
+  })
+}
+
+# Run the app
+shinyApp(ui = ui, server = server)
+
