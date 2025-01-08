@@ -25,6 +25,10 @@ Major drivers include attacks by armed groups, inter-community violence, and ins
 
 ## 2. ACLED Heatmap of DRC 
 
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/c593e88f-abab-4dbc-b4fd-61091f70f4ad" />
+http://127.0.0.1:3098
+
+
 ## 3. IDP, ACLED Correlation
 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/6ea7a7cb-211e-4a6a-ba8d-db0b0b8e1f68" />
