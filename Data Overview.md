@@ -27,6 +27,16 @@ Major drivers include attacks by armed groups, inter-community violence, and ins
 
 ## 3. IDP, ACLED Correlation
 
+<img width="500" alt="image" src="https://github.com/user-attachments/assets/6ea7a7cb-211e-4a6a-ba8d-db0b0b8e1f68" />
+
+Pearson's product-moment correlation
+
+data:  merged_data_clean$event_count and merged_data_clean$total_idps
+t = 7.0145, df = 70, p-value = 1.175e-09
+alternative hypothesis: true correlation is not equal to 0
+95 percent confidence interval: 0.4826390 0.7608889
+sample estimates: cor 0.6424714 
+
 ## 4. 
 
 
