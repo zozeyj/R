@@ -1,0 +1,280 @@
+---
+title: "PS3"
+author: "Yeji Kim"
+date: "03/19/2025"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part 1
+For this section, students will use a subset of Robert Boatright’s “Primary Timing Project” data
+(boatright_subset.dta to be loaded via haven). This dataset includes U.S. candidate-level election results including each candidate’s political party, incumbency status, and geographic details. Before beginning the analysis below, randomly sample 20% of your data to be used as a hold-out test set.
+
+### 1-a.
+Fit a decision tree using Gvote_share as the outcome variable and primary_party, district_pvi,
+district_nonwhite, incumbent, and district_dpres_lagged as predictors. 
+
+If there is missing data, feel free to omit that data from the analysis. Describe the logic produced by the tree for the least populated leaf node that you estimate.
+
+```{r, echo = T, eval = T}
+#load data 
+# Helper packages
+library(dplyr)       # for data wrangling
+library(ggplot2)     # for awesome plotting
+library(haven)
+
+# Modeling packages
+library(rpart)       # direct engine for decision tree application
+library(caret)       # meta engine for decision tree application
+
+# Model interpretability packages
+library(rpart.plot)  # for plotting decision trees
+library(vip)         # for feature importance
+library(pdp)         # for feature effects
+
+boatright_all <- read_dta("~/Documents/2025 Spring (4) /PPOL-6803_Data-Science/PS3/boatright_subset.dta")
+
+#subset variables of interest and omit NA
+boatright_subset <- boatright_all %>%
+  select(Gvote_share, primary_party, district_pvi, district_nonwhite, incumbent, district_dpres_lagged)
+
+boatright_subset <- boatright_subset %>%
+  na.omit()
+  
+```
+
+```{r, echo = T, eval = T}
+## caret
+
+# split the data into train/test sets 
+set.seed(001)
+
+train_index <- createDataPartition(boatright_subset$Gvote_share, 
+                                   p = 0.8, 
+                                   list = FALSE
+                                   )
+
+train_data <- boatright_subset[train_index, ]
+test_data <- boatright_subset[-train_index, ] #randomly sample 20% as test set 
+
+#Regression Tree 
+tree_model <- train(Gvote_share ~ ., 
+                    data = train_data,
+                    method = 'rpart'
+                    )
+
+#visualize
+tree_model 
+plot(tree_model)
+ggplot(tree_model)
+
+plot(tree_model$finalModel)
+text(tree_model$finalModel)
+
+
+```
+
+### 1-b.
+Fit a bootstrap aggregated decision tree model, also using Gvote_share as the outcome variable. Does this bagged model perform better or worse than the decision tree in (1a)? Explain your answer.
+
+```{r, echo = T, eval = T}
+set.seed(111)
+
+# train bagged model
+tree_bag <- train(Gvote_share ~ .,
+                  data = train_data,
+                  method = "treebag"
+                  )
+
+tree_bag
+
+```
+
+### 1-c
+
+Q1: Compare the predictions on the hold out test set from the decision tree (1a) and the bagged model (1b). Find the RMSE for each model (also using the hold out set) and report which model is better.
+
+Q2: Then, estimate an OLS linear model using the same predictors. Does the OLS model do better or worse than the tree models according to RMSE? Explain
+
+```{r, echo = T, eval = T}
+test_data$predict_tree <- predict(tree_model, test_data)
+test_data$predict_bag <- predict(tree_bag, test_data)
+
+RMSE(test_data$predict_tree, test_data$Gvote_share)
+RMSE(test_data$predict_bag, test_data$Gvote_share)
+```
+A1: Using test set, regression tree has RMSE of 0.14 and bagged tree model has RMSE of 0.13. Therefore, bagged tree is slightly outperforming regression tree model. 
+
+```{r, echo = T, eval = T}
+#OLS linear model 
+set.seed(007)
+
+#method 1
+#5 fold
+trc <- trainControl(
+  method ='cv',
+  number = 5
+)
+
+#LOOCV
+trc2 <- trainControl(
+  method = 'LOOCV'
+)
+
+ols1 <- train(Gvote_share ~ ., 
+          data = boatright_subset,
+          method = 'lm',
+          trControl = trc)
+
+ols1
+ols1$finalModel %>%
+  summary()
+
+```
+A2: The OLS model has RSME of 0.14, hence considering the computational power may be much efficient method with similar results. 
+
+One explanation of this could be the variables might hold the assumption of linear parameter, therefore can be explained by a model fixed by functional form. Non-parametric models, such as Regression Trees and Bootstrap Aggregation models would be a better choice if the prediction model could not have been descrived in a functional form.   
+
+## 2. Wine Quality 
+For this section, we will study wine quality data (wine_quality.csv) which examines various characteristics
+of red wines and identifies whether the wine is a premium brand or not. Before beginning the analysis below,
+randomly sample 20% of your data to be used as a hold-out test set. For the models below, please use alcohol
+as the outcome variable
+
+### 2-a 
+Estimate a linear regression, with the following predictors: fixed.acidity, residual.sugar, pH, and
+premium. Plot a histogram (using ggplot2) of the predictions in the training set for each wine. What
+is the RMSE of the model on the hold out set?
+
+```{r, echo = T, eval = T}
+#load data
+library(tidyverse)
+wine_quality <- read_csv("wine_quality.csv")
+
+wine_quality %>%
+  glimpse()
+
+#subset for variables of interest and divide test and training set 
+wine_quality_subset <- wine_quality %>%
+  select(alcohol,fixed.acidity, residual.sugar, pH, premium)
+
+wine_quality_subset <- wine_quality_subset %>%
+  na.omit()
+
+set.seed(003)
+train_index <- createDataPartition(wine_quality_subset$alcohol, 
+                                   p = 0.8, 
+                                   list = FALSE
+                                   )
+
+w_train_data <- wine_quality_subset[train_index, ]
+w_test_data <- wine_quality_subset[-train_index, ] #randomly sample 20% as test set 
+
+```
+
+```{r, echo = T, eval = T}
+
+set.seed(004)
+#Linear Regression
+
+#LOOCV
+trc2 <- trainControl(
+  method = 'LOOCV' #leave-one-out cross-validation (special case of cv where k equals the number of data points)
+)
+
+wine_lm <-train(alcohol~., 
+                data = w_train_data,
+                method = 'lm',
+                trControl = trc2)
+
+predict(wine_lm, w_train_data)
+predict(wine_lm, w_test_data)
+
+w_train_data$pred <- predict(wine_lm, w_train_data)
+w_train_data %>%
+  glimpse()
+
+w_train_data %>%
+  ggplot()+
+  aes(x =pred)+
+  geom_histogram(bins =20) 
+```
+```{r, echo = T, eval = T}
+#what is the RSME of the model on the hold out set? 
+w_test_data$predict_lm <- predict(wine_lm, w_test_data)
+RMSE(w_test_data$predict_lm, w_test_data$alcohol)
+
+```
+The RSME of the linear model on test data is 0.9 
+
+### 2-b
+Q1: Using the same predictors as (2a), estimate a KNN and vary the value of K to be equal to 1, 5, 10, and 20. Which value of K performs best? Explain your reasoning and what other assumptions (if any) are made for this decision. 
+
+```{r, echo = T, eval = T}
+#KNN model (default metric) 
+knn_m <- train(alcohol~.,
+               data = w_train_data,
+               method = 'knn',
+               trControl = trainControl(method = 'cv'),
+               tuneGrid = data.frame(k=c(1,5,10,20))
+               )
+knn_m
+
+```
+A1: According to RMSE and Rsq metric, the best model is k=20. 
+
+Q2: Using the best model, what is the predicted class for the following wine: fixed.acidity = 7.1, residual.sugar=4.2, pH=2.8, and premium=0?
+```{r, echo = T, eval = F}
+knn_m2 <- train(alcohol~.,
+               data = w_train_data,
+               method = 'knn',
+               trControl = trainControl(method = 'cv'),
+               tuneGrid = data.frame(k=20)
+               )
+
+pred <-data.frame(
+  fixed.acidity = 7.1, 
+  residual.sugar=4.2, 
+  pH=2.8, 
+  premium=0, 
+  alcohol =NA )
+
+pred %>%
+  glimpse
+
+predicted_alcohol <- predict(knn_m2,pred)
+print(predicted_alcohol)
+
+```
+
+### 2-3
+Q: Estimate a “kitchen sink” regression tree (“kitchen sink” means including all of the available variables
+as predictors). Did this model outperform the best KNN model above? Explain
+```{r, echo = T, eval = T}
+#omit NA
+wine_quality <- wine_quality %>%
+  na.omit()
+
+set.seed(006)
+train_index <- createDataPartition(wine_quality$alcohol, 
+                                   p = 0.8, 
+                                   list = FALSE
+                                   )
+
+w_train_data_2 <- wine_quality_subset[train_index, ]
+w_test_data_2 <- wine_quality_subset[-train_index, ] #randomly sample 20% as test set 
+
+rt_mod <- train(alcohol~.,
+                data = w_train_data_2,
+                method = 'rpart'
+                )
+
+rt_mod
+plot(rt_mod)
+```
+A: The smallest RMSE, 0.937, was observed in cp = 0.031. This, though very close to the k=20 KNN model, does not outperform the RMSE value 0.8. 
