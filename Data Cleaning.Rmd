@@ -1,0 +1,509 @@
+---
+title: "Final Proposal_DRC_CONFLICT"
+author: "Yeji Kim"
+date: "2025-05-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+# IOM Data Cleaning
+## 2. IOM M23
+1.  Download round 2-23 Rapid Crisis Assessment M23 (North Kivu) in csv
+2.  Create master dataset using Excel and manually merge RCA
+    <https://docs.google.com/spreadsheets/d/1USO-gjlVTUKMbhYA3AJLjb7p8p5gt_tM1WfwIvZbD1Y/edit?usp=sharing>
+3.  Cleaned the column name using Stata
+    [https://github.com/zozeyj/Stata/blob/2024-Coding-Sample-(Stata)/M23_datacleaning.do](https://github.com/zozeyj/Stata/blob/2024-Coding-Sample-(Stata)/M23_datacleaning.do){.uri}
+
+We now import the data cleaned from Stata into R.
+### 2-1. Df. M23_clean_v2
+```{r, echo = F, eval = T}
+M23_clean_v2 <- read_dta("M23_clean_v2.dta")
+```
+
+### 2-2. Df. M23_clean_v3
+```{r, echo = F, eval = T}
+#import data
+colnames(M23_clean_v2)
+
+#select specific columns (1)
+M23_clean_v3 <- M23_clean_v2 %>%
+  dplyr::select(site_type, year, month, admin1, admin2, admin3, household, individuals, men, women, children, zonedorigine_province, zonedorigine_territoire,zonedorigine_zonedesanté)%>%
+    mutate(individuals = men + women + children)
+
+#clean the column zonedorigine 
+M23_clean_v3 <- M23_clean_v3 %>%
+  dplyr::rename("admin1_origine" = "zonedorigine_province",
+         "admin2_origine" = "zonedorigine_territoire",
+         "admin3_origine" = "zonedorigine_zonedesanté")
+colnames(M23_clean_v3) #check our work 
+
+unique_admin3_origin <- sort(unique(M23_clean_v3$admin3_origine))
+unique_admin2_origin <- sort(unique(M23_clean_v3$admin2_origine))
+
+#treat missing NA values (e.g.turn empty into NA )
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3 = na_if(admin3, ""),
+         admin2 = na_if(admin2, ""),
+         admin2_origine = na_if(admin2_origine, "SL"),
+         admin2_origine = na_if(admin2_origine, ""),
+         admin3_origine = na_if(admin3_origine, ""),
+         admin3_origine = na_if(admin3_origine, "SL"),
+         admin3_origine = na_if(admin3_origine, "INCONNU"),
+         )
+
+# again, our goal is to take only first admin3 if there is multiple admin3s
+sapply(M23_clean_v3, class) #admin3_origine is "character"is variable 
+
+#ADMIN 2
+#use stringr:: to only select the worked!
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin2_origine_single = 
+           stringr::str_split(stringr::str_to_upper(admin2_origine), pattern = ",", simplify = TRUE)[,1])
+
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin2_origine_single = stringr::str_split(stringr::str_to_title(admin2_origine_single), pattern = ";", simplify = TRUE)[,1])
+
+#ADMIN 3
+#use stringr:: to only select the worked!
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = 
+           stringr::str_split(stringr::str_to_upper(admin3_origine), pattern = ",", simplify = TRUE)[,1])
+
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = stringr::str_split(stringr::str_to_title(admin3_origine_single), pattern = ";", simplify = TRUE)[,1])
+
+
+```
+
+### 2-3. Df. M23_sum_admin3
+```{r, echo = T, eval = T}
+
+#summarize by ADMIN3
+M23_sum_admin3 <- M23_clean_v3 %>%
+  group_by(year, month, admin2, admin3, admin2_origine_single, admin3_origine_single) 
+
+#Remove NA in ADMIN3
+M23_sum_admin3 <- M23_sum_admin3 %>%
+  filter(!is.na(admin3))
+
+glimpse(M23_sum_admin3)
+```
+
+# ACLED
+## 1. ACLED API
+
+### 1-1 Df. drc_acled
+```{r , echo = T, eval = T}
+acledR::acled_access('yk713@georgetown.edu', 'dHZSTs15hGalBrziqQqS') #use the authorization key
+
+drc_acled <- acledR::acled_api(
+  email = "yk713@georgetown.edu",
+  key = "dHZSTs15hGalBrziqQqS",
+  country = "Democratic Republic of Congo",
+  start_date = "2021-03-01"
+)
+
+# we would like to extract month into a separate column and collapse into frequency
+drc_acled$month <- format(drc_acled$event_date, "%m")
+
+# change month as numeric 
+drc_acled <- drc_acled %>%
+  mutate(month = as.numeric(month))
+
+```
+### connection between drc and M23 
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Create a new column labeling whether it's M23 or Other
+drc_acled_labeled <- drc_acled %>%
+  mutate(conflict_type = ifelse(actor1 == "M23: March 23 Movement", "M23", "Other"))
+
+# Step 2: Count number of conflicts per year and conflict type
+conflict_counts <- drc_acled_labeled %>%
+  group_by(year = lubridate::year(event_date), conflict_type) %>%
+  summarise(nconflicts = n(), .groups = 'drop')
+
+# Step 3: Plot
+ggplot(conflict_counts, aes(x = factor(year), y = nconflicts, fill = conflict_type)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Conflicts by Year: M23 vs Others",
+       x = "Year",
+       y = "Number of Conflicts",
+       fill = "Conflict Type",
+       caption = "Source: ACLED API, Visual by Yeji") +
+  theme_minimal()
+
+
+```
+
+### Df_drc_acled_monthly
+
+```{r}
+drc_acled_monthly <- drc_acled %>%
+  group_by(year, month) %>%
+  summarise(nconflicts = n())
+
+summary(drc_acled_monthly$nconflicts)
+```
+
+### Vis: Distribution of Conflict Frequency
+```{r}
+ggplot(drc_acled_monthly, aes(x = nconflicts)) +
+  geom_histogram(bins = 15, fill = "indianred", color = "gray") +
+  labs(title = "Distribution of Monthly Conflict across DRC",
+       subtitle = "2021 March to 2025 April, on average 269 conflicts occured monthly",
+       x = "Number of Conflicts",
+       y = "Frequency", 
+       caption = "Source: ACLED API, visual by Yeji") +
+  theme_minimal()
+```
+
+### Df.drc_acled_admin1
+```{r}
+drc_acled_admin1 <- drc_acled %>%
+  group_by(admin1) %>%
+  summarise(nconflicts=n())
+```
+
+### Vis. admin1 conflicts for 2021-2025
+```{r}
+ggplot(drc_acled_admin1, aes(x = admin1, y = nconflicts)) +
+  geom_col(fill = "indianred3", color = "gray") +
+  labs(title = "Number of Total # of Conflicts by Province (2021-2025)",
+       subtitle = "North-Kivu=6663 & Ituri=3171 & Sud-Kivu=2393",
+       x = "Province",
+       y = "Number of Conflicts",
+       caption = "Source: ACLED API, visual by Yeji") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### Df.drc_acled_admin1
+```{r}
+drc_acled_admin2 <- drc_acled %>%
+  group_by(admin1, admin2) %>%
+  summarise(nconflicts=n())
+```
+
+
+### Vis. Treemap of Conflicts admin 1 and 2
+```{r}
+drc_top3 <- drc_acled_admin2 %>%
+  filter(admin1 %in% c("Nord-Kivu", "Sud-Kivu", "Ituri"))
+
+library(treemap)
+
+treemap(drc_top3, 
+        index = c("admin1", "admin2"),   
+        vSize = "nconflicts",             
+        vColor = "admin1",                 
+        type = "categorical",              
+        palette = c("indianred1", "indianred3", "indianred4"), # <<< three shades of Indian Red
+        fontsize.labels = c(18, 12),
+        fontcolor.labels = c("white", "black"),
+        fontface.labels = c(2, 1),
+        bg.labels = 0,
+        align.labels = list(c("left", "top"), c("center", "center")),
+        border.col = "white",
+        border.lwds = c(4, 2),
+        title = "Territories of Three Conflict Prone Provinces (ACLED)" ,
+        fontsize.title = 15,
+        position.legend = "none" # <<< remove legend (no need since colors are intuitive now)
+)
+
+
+```
+
+### Df. drc_acled_sum_wide 
+```{r, echo = T, eval = T}
+library(tidyverse)
+library(patchwork)
+
+# 1. Summarize and reshape data
+drc_acled_sum_wide <- drc_acled_m %>%
+  filter(!is.na(admin3)) %>%
+  pivot_wider(
+    names_from = year,
+    values_from = nconflicts,
+    names_prefix = "nconflicts_"
+  ) %>%
+  group_by(admin3) %>%
+  summarise(
+    nconflicts_2021 = sum(nconflicts_2021, na.rm = TRUE),
+    nconflicts_2025 = sum(nconflicts_2025, na.rm = TRUE)
+  ) %>%
+  filter(!is.na(nconflicts_2021) & !is.na(nconflicts_2025) & nconflicts_2025 > 0) %>%
+  mutate(gap = nconflicts_2025 - nconflicts_2021) %>%
+  arrange(desc(abs(gap))) %>%
+  slice_head(n = 15)  # <<< Only top 15 biggest movers
+
+# 2. Define a consistent order (optional: sort by 2021 conflict)
+admin3_order <- drc_acled_sum_wide %>%
+  arrange(nconflicts_2021) %>%
+  pull(admin3)
+
+# 3. Prepare long-form data for the main plot
+df_long <- drc_acled_sum_wide %>%
+  pivot_longer(
+    cols = starts_with("nconflicts_"),
+    names_to = "year",
+    values_to = "value"
+  ) %>%
+  mutate(
+    year = dplyr::recode(year, "nconflicts_2021" = "2021", "nconflicts_2025" = "2025"),
+    year = factor(year, levels = c("2021", "2025")),
+    admin3 = factor(admin3, levels = admin3_order)
+  )
+
+```
+
+### Vis. admin 3 changes for M23 (2023, 2024)
+```{r}
+# 4. Main plot
+p_main <- ggplot(df_long, aes(x = value, y = admin3, group = admin3)) +
+  geom_line(color = "gray80", linewidth = 3.2) +
+  geom_point(aes(color = year, shape = year), size = 3) +
+  scale_color_manual(values = c("2021" = "#1f77b4", "2025" = "#ff7f0e")) +
+  scale_shape_manual(values = c("2021" = 16, "2025" = 17)) +
+  labs(
+    x = "Number of Conflicts",
+    y = "Admin3 Area",
+    title = "Change in Number of DRC Conflicts (2021 vs 2025)",
+    color = "Year",
+    shape = "Year"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(size = 12, face = "bold"),
+    axis.title.y = element_text(size = 12, face = "bold"),
+    axis.text.y = element_text(size = 10, hjust = 1),
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+# 5. Gap annotation
+df_gap <- drc_acled_sum_wide %>%
+  mutate(
+    gap = nconflicts_2025 - nconflicts_2021,
+    admin3 = factor(admin3, levels = admin3_order),
+    gap_party_max = case_when(
+      gap > 0 ~ "↑",
+      gap < 0 ~ "↓",
+      TRUE ~ "="
+    ),
+    gap_label = paste0(if_else(gap > 0, "+", ""), gap, gap_party_max)
+  )
+
+p_gap <- ggplot(df_gap, aes(x = 0, y = admin3)) +
+  geom_text(aes(label = gap_label, color = gap_party_max),
+            fontface = "bold", size = 3.2, hjust = 0) +
+  theme_void() +
+  coord_cartesian(xlim = c(0, 1)) +
+  theme(
+    plot.margin = ggplot2::margin(0, 0, 0, 0),
+    panel.background = element_rect(fill = "#EFEFE3", color = NA),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("↑" = "#BF2F24", "↓" = "#436685", "=" = "gray50"))
+
+# 6. Final combined plot
+final_plot <- p_main + p_gap + plot_layout(widths = c(4, 1))
+
+final_plot
+```
+
+### Figure 5.6. Stacked Graph for 2021 2025 DRC Conflict 
+```{r, stack graph 2021-2025}
+# Libraries
+library(ggplot2)
+library(dplyr)
+
+# Summarize conflict events by year and event_type
+df_stacked <- drc_acled %>%
+  group_by(year, event_type) %>%
+  summarise(n = n(), .groups = "drop")
+
+unique(drc_acled$event_type)
+
+# Plot: Stacked Area Chart
+ggplot(df_stacked, aes(x = year, y = n, fill = event_type)) +
+  geom_area(alpha = 0.9, size = 0.5, color = "white") +
+  
+  # Title and axis labels
+  labs(
+    title = "Stacked Area Chart of DRC Conflict by Events Type",
+    subtitle = "Grouped by Year (2021–2025)",
+    x = "Year",
+    y = "Number of Conflict Events",
+    fill = "Event Type"
+  ) +
+  
+scale_fill_manual(values = c(
+  "Battles" = "#F8766D",
+  "Explosions/Remote violence" = "#7CAE00",
+  "Strategic developments" = "#00BFC4",
+  "Violence against civilians" = "#C77CFF",
+  "Riots" = "#FFB300",         # Added a gold-orange
+  "Protests" = "#00BA38"       # Added a green
+))
+
+  # Clean theme
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 13),
+    plot.subtitle = element_text(hjust = 0.5, size = 10),
+    axis.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+```
+
+# Food Price
+## 4. Food Price 
+```{r}
+library(readr)
+food_data <- read_csv("~/Downloads/iom_acled_food_imputed.csv")
+View(food_data)
+
+food_data$zones <- str_to_title(food_data$zones)
+match(sort(unique(food_data$zones)), sorted_unique_admin3_hz)
+
+# Joining with shapefile
+food_data_gis <- hz_map_simple %>%
+  left_join(food_data, by = c("name" = "zones"))
+```
+
+### Vis. Heat 2021
+```{r}
+ggplot() +
+  geom_sf(data = hz_map_simple, aes(geometry = geom),
+          fill = "gray90", color = "white", size = 0.2) +  # <<< Base gray map
+  geom_sf(data = food_data_gis %>% filter(year == 2021 & !is.na(price_food_price_index)),
+          aes(geometry = geom, fill = price_food_price_index),
+          color = "white", size = 0.2) +                  # <<< Overlay only areas with data
+  scale_fill_gradient(
+    name = "Food Price Index",
+    low = "#DCEAF2", high = "#08306B"
+  ) +
+  labs(
+    title = "Average Food Price Index (2021)",
+    subtitle = "By admin3 area",
+    fill = "Food Price Index"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "right"
+  )
+
+
+
+```
+
+### V4-1 Heatmap (2021-2025) - layering
+```{r}
+# 1. Remove rows with missing year
+food_data_gis_clean <- food_data_gis %>%
+  filter(!is.na(year))  # <<< No NA year anymore
+
+# 2. Plot with two layers: base gray map + colored food price
+
+  # Food price overlay
+  food<- ggplot()+
+  geom_sf(data = hz_map_simple, aes(geometry = geom),
+          fill = "gray90", color = "white", size = 0.2) +  # <<< Base gray map
+  geom_sf(data = food_data_gis_clean,
+          aes(geometry = geom, fill = price_food_price_index),
+          color = "white", size = 0.2) +
+  
+  scale_fill_gradient(
+    name = "Food Price Index",
+    low = "#DCEAF2", high = "#08306B"
+  ) +
+  
+  labs(
+    title = "Average Food Price Index (2021–2025)",
+    subtitle = "Average by admin3 area and year",
+    fill = "Food Price Index"
+  ) +
+  
+  facet_wrap(~year) +   # Cleanly facet by year now (no NA map)
+  
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "right"
+  )
+
+print(food)
+```
+### Vis of Foodmap (without layering)
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# 1. Remove rows with missing year (important to avoid extra "NA" panel)
+food_data_gis_clean <- food_data_gis %>%
+  filter(!is.na(year))  # <<< ONLY filter NA in year
+
+# 2. Plot
+ggplot(food_data_gis_clean) +
+  geom_sf(aes(geometry = geom, fill = price_food_price_index),
+          color = "white", size = 0.2) +
+  
+  scale_fill_gradient(
+    name = "Food Price Index",
+    low = "#DCEAF2", high = "#08306B",
+    na.value = "gray90"    # <<< missing food index will be gray
+  ) +
+  
+  labs(
+    title = "Average Food Price Index (2021–2025)",
+    subtitle = "Average by admin3 area and year",
+    fill = "Food Price Index"
+  ) +
+  
+  facet_wrap(~ year) +   # Facet by year cleanly
+  
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.position = "right"
+  )
+
+
+```

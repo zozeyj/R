@@ -1,0 +1,1545 @@
+---
+title: "DRC M23 Conflict and Internally Displaced Population Analysis"
+author: "Yeji Kim"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document: default
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = F}
+# Libraries Setup
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(lubridate)
+library(tidyverse)
+library(haven)
+library(stringr)
+library(hrbrthemes)
+library(Hmisc)
+library(fixest)
+library(unikn)   
+library(treemap)
+library(units)
+library(car)
+library(glmnet)
+library(ggrepel)
+```
+
+### Yeji Kim (MIDP 25)
+
+### Intro to Data Science 2025 Spring
+
+# 1. Introduction
+
+The Democratic Republic of Congo (DRC) faces one of the world’s largest and most complex internal displacement crises. As of early 2024, more than 6.9 million people were displaced within the country, with displacement concentrated in the eastern provinces of North Kivu, South Kivu, Ituri, and Tanganyika. Despite the DRC’s significant natural wealth, cycles of conflict, instability, and recurring shocks have continued to disrupt livelihoods and displace communities.
+
+Understanding and anticipating patterns of internal displacement is critical for improving humanitarian response and long-term resilience efforts. While past research has explored the drivers of displacement in the DRC, there remains a need for predictive tools that can support early warning systems and anticipatory action.
+
+This report aims for two goals: first, to descriptively understand the characteristics of the civil conflict and migration pattern; second, to use the characteristics of the most prolonged and urgen conflict M23 crisis and forcest the magnitude of international displacement at the submational level. 
+
+Drawing on monthly data between 2021 and 2025, the analysis explores the temporal and geographical  relationship between conflict and migration and utilizes machine learning approaches to identify key predictors of the magnitude of displaced inviduals and assess how past/future conditions of conflict influence displacement trends. The findings are intended to support humanitarian actors, policymakers, and development partners in designing more proactive, data-driven interventions to protect vulnerable populations.
+
+## 1-1. Research Question
+
+### Descriptive Question:
+What are the temporal and spatial characteristics of civil conflict and internal displacement in the Democratic Republic of Congo between 2021 and 2025, with a focus on the M23 crisis?
+
+### Predictive Question:
+To what extent can past and future conflict conditions predict the magnitude of internal displacement at the subnational (health zone) level using machine learning approaches?
+
+# 2. Background: M23
+
+M23, named after the March 23, 2009 agreement that ended a previous Tutsi‐led rebellion in eastern Congo, is the latest Tutsi‐led insurgency confronting the Congolese government (Reuters, 2025). The group re‐launched its rebellion in 2022, accusing the government of failing to implement the peace accord fully, particularly regarding the integration of Congolese Tutsis into the army and administrative structures (Reuters, 2025).
+
+Between January and June 2024, the Internal Displacement Monitoring Centre (IDMC) recorded 2,012,000 internal displacements attributable to M23, making it the second‐largest conflict‐related displacement crisis globally for that period (IDMC, 2025). As of March 18, 2025, the M23 rebels have declined to join peace talks, indicating that the conflict and ensuing displacement are likely to persist (Al Jazeera, 2025).
+
+Meanwhile, the Norwegian Refugee Council (NRC) has ranked the Democratic Republic of the Congo (DRC) among the world’s most overlooked displacement crises for eight consecutive years, with over 25 million people—about one‐quarter of the total population—facing violence, conflict, and disasters, and receiving only 41% of the required humanitarian funding (NRC, 2025).
+
+Current research endeavors to shed light on conflict‐driven population movements, thereby guiding more effective humanitarian aid and shelter provision.
+
+# 3. Data Preprocessing
+
+## 3-1. Data Source
+The data is collected from three different sources, each on Migration, Conflict, and Geography. 
+
+### IOM M23 
+First, the migration data is drawn from International Organization for Migration website, operated by UN Migration. Since the breakout of M23 crisis, IOM Displacement Tracking Matrix (DTM) has collected in total 23 rounds of "Évaluation Rapide de Crise M23" (Rapid M23 Crisis Evaluation) displacement data. Each rounds of data, dating from November 2022 to July 2024, totalling 59,264 observations were collected. 
+
+### ACLED API 
+Second source is ACLED (Armed Conflict Location and Event Date) API. First the conflict data is filtered for Democratic Republic of Congo and filtered for 2021 and onwards (following the whole duration of M23 conflict) and filtered again to capture M23 conflict only using actor1 == "M23: March 23 Movement" command. 
+
+### DRC Admin 3 GPKG 
+Next, to create heatmap and calculate how much internally displaced individuals travel, gpkg file containing multipolygon of admin 3 (health zone) is downloaded from <https://data.humdata.org/dataset/zones-de-sante-rdc>. 
+
+## 3-2. Data Cleaning
+### IOM M23
+For data cleaning, two major challenges rose for IOM data . First challenge was related to incoherent data structure, including mixture of french and english names of administrative regions, To address this, the names of administrative levels were translated to English and typos and incoherences were manually recoded. 
+
+Second challenge was incoherent number of columns (in other words, the amount of information collected) for each rounds. For example, round 2 of M23-DTM data was collected upto admin 2 level and displaced households, individuals (men, women, and children). The information tend to grow more granular in geographic level (reaching admin 3 all the way down to chiefdom) and from round 8 started to encode the origins admin 3 levels of the displaced population.To examine the movement of the IDPs, where they come from and go to, data was considered from round 8. 
+
+Third challenge was level of observation. Each row was number of IDPs at the unit of observation, which as described in example, varied number of individuals for each admin 2 (territory) or in later rounds of data number of individuals for chiefdom A who escaped conflict from chiefdom B. The solution was to group the observation by year, month, admin 3 of origin, and primary admin 3 of destination (when there were multiple admin 3 destination coded, the first destination was selected). 
+
+## 3-3. Final Data Merge 
+### IOM: M23_gis
+After cleaning and summarizing for unique match of origin-destination of each year/month at admin 3 (healthzone) level, the data was joined with gpkg file to have geographic information column for origin and destination. 
+
+Then the centroid was calculated for the geom_des column and geom_og column and using 'st_distance' function, the distance travelled per each observation was coded as 'dist' column. The calculation was done in meters. 
+
+### ACLED: M23_acled_sf, DRC_acled_sf
+Now for ACLED data, the variables of interest are the time of conflict, fatalities, civilian_targeting (a binary variable capturing whether the conflict was targeting civilian or not, 1 = yes, 0 = no), event type, and geographic information (admin 1 to 3 as well as longtitude and latitude). 
+
+First, as IOM data is coded monthly, and not daily, we also collapse the frequency of the number of conflict, fatalities, and for civilian_targeting we calculate the average of the civilian_targeting value of the given month (indicating what was the proportion of the conflict in given month was civilian targeted conflict). 
+
+** As for event type, since it was categorical variable containing multiple event types, for descriptive analysis, the dataset before collapsing into monthly level was utilized. 
+
+Second, after ACLED data is summarized into M23_acled, using the longtitude and latitude column, we assign admin 3 of the gpkg file. The reason for not matching admin 3 of M23_acled directly with gpkg file is due to the typos and language mismatch. The final conflict data frame, M23_acled_sf, containing polygon is created. 
+
+Third, to compare the M23 occurances with the whole conflict occurances in the most conflict-prone provinces, North-Kivu, South-Kivu and Ituri, same method is used to create dataframe, DRC_acled_sf that captures the total conflict in DRC. 
+
+### M23_final: IOM + ACLED
+With migration data and conflict data collapsed to monthly level of admin 3, now final dataset can be created. Since the research aims to explore how M23 conflict of health zone A will impact residents of A to move out, when we are merging conflict and migration, we merge the two dataframe by origin of admin 3 from the migration data and admin 3 of the conflict data. 
+
+Also, the research would like to see if the conflict happened before or after will impact the internal movement. In other words, do individuals move before the conflict happens preemptively or as consequence of conflict? Hence, the conflict and conflict characteristics (fatalities, and civilian target) was lagged monthly for six months and lead monthly for six months, in total incorporating a whole year. 
+
+The major varaibles of interest are demographics of the IOM (which is 0 missing values), and admin 3 origin and destionation (all the missing values are removed), and the missing values of the conflict characteristics are imputed using "missForest" package. The number of conflicts in the 
+
+The final dataframe, M23_final_laglead, had 1650 observations, 59 variables. 
+
+```{r, echo = F, eval = T}
+M23_clean_v2 <- read_dta("M23_clean_v2.dta")
+
+#import data
+colnames(M23_clean_v2)
+
+#select specific columns (1)
+M23_clean_v3 <- M23_clean_v2 %>%
+  dplyr::select(site_type, year, month, admin1, admin2, admin3, household, individuals, men, women, children, zonedorigine_province, zonedorigine_territoire,zonedorigine_zonedesanté)%>%
+    mutate(individuals = men + women + children)
+
+#clean the column zonedorigine 
+M23_clean_v3 <- M23_clean_v3 %>%
+  dplyr::rename("admin1_origine" = "zonedorigine_province",
+         "admin2_origine" = "zonedorigine_territoire",
+         "admin3_origine" = "zonedorigine_zonedesanté")
+colnames(M23_clean_v3) #check our work 
+
+unique_admin3_origin <- sort(unique(M23_clean_v3$admin3_origine))
+unique_admin2_origin <- sort(unique(M23_clean_v3$admin2_origine))
+
+#treat missing NA values (e.g.turn empty into NA )
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3 = na_if(admin3, ""),
+         admin2 = na_if(admin2, ""),
+         admin2_origine = na_if(admin2_origine, "SL"),
+         admin2_origine = na_if(admin2_origine, ""),
+         admin3_origine = na_if(admin3_origine, ""),
+         admin3_origine = na_if(admin3_origine, "SL"),
+         admin3_origine = na_if(admin3_origine, "INCONNU"),
+         )
+
+# again, our goal is to take only first admin3 if there is multiple admin3s
+sapply(M23_clean_v3, class) #admin3_origine is "character"is variable 
+
+#ADMIN 2
+#use stringr:: to only select the worked!
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin2_origine_single = 
+           stringr::str_split(stringr::str_to_upper(admin2_origine), pattern = ",", simplify = TRUE)[,1])
+
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin2_origine_single = stringr::str_split(stringr::str_to_title(admin2_origine_single), pattern = ";", simplify = TRUE)[,1])
+
+#ADMIN 3
+#use stringr:: to only select the worked!
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = 
+           stringr::str_split(stringr::str_to_upper(admin3_origine), pattern = ",", simplify = TRUE)[,1])
+
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = stringr::str_split(stringr::str_to_title(admin3_origine_single), pattern = ";", simplify = TRUE)[,1])
+
+#summarize by ADMIN3
+M23_sum_admin3 <- M23_clean_v3 %>%
+  group_by(year, month, admin2, admin3, admin2_origine_single, admin3_origine_single) 
+
+#Remove NA in ADMIN3
+M23_sum_admin3 <- M23_sum_admin3 %>%
+  filter(!is.na(admin3))
+
+glimpse(M23_sum_admin3)
+
+acledR::acled_access('yk713@georgetown.edu', 'dHZSTs15hGalBrziqQqS') #use the authorization key
+
+drc_acled <- acledR::acled_api(
+  email = "yk713@georgetown.edu",
+  key = "dHZSTs15hGalBrziqQqS",
+  country = "Democratic Republic of Congo",
+  start_date = "2021-03-01"
+)
+
+# we would like to extract month into a separate column and collapse into frequency
+drc_acled$month <- format(drc_acled$event_date, "%m")
+
+# change month as numeric 
+drc_acled <- drc_acled %>%
+  mutate(month = as.numeric(month))
+
+drc_acled_labeled <- drc_acled %>%
+  mutate(conflict_type = ifelse(actor1 == "M23: March 23 Movement", "M23", "Other"))
+
+### 3-1. Df. hz_map_simple
+#518 unique values of admin 3 in hz_map 
+setwd("/Users/yejikim/Documents/2025_Peloria/3.Admin_gis")
+hz_map <- st_read('DRC_healthzone.gpkg')
+sorted_unique_admin3_hz <- sort(unique(hz_map$name))
+hz_map_simple <- st_simplify(hz_map, dTolerance = 200)  # Adjust 100 as needed
+
+#there are 39 unique admin 3
+sorted_unique_admin3 <- sort(unique(M23_sum_admin3$admin3))
+print(sorted_unique_admin3)
+
+#there are 36 unique admin 3 origin 
+sorted_unique_admin3_og <- sort(unique(M23_sum_admin3$admin3_origine_single))
+print(sorted_unique_admin3_og)
+
+match(sorted_unique_admin3_og, sorted_unique_admin3) # three unmatches between admin 3 origin and admin 3
+
+#goal - based on the hz admin 3 names:
+# for admin 3_og change Beni (Ville) into Beni, Bamb0 into Bambo, Nyiragongo into Nyirangongo
+# for admin 3 change Nyiragongo into Nyirangongo and drop Nyanzale (could not find the admin 3 code or information in IOM nation dataset)
+
+conditions_og <- c("Beni (Ville)", "Bamb0", "Nyiragongo")
+replacement_og <- c("Beni", "Bambo", "Nyirangongo")
+
+M23_sum_admin3$admin3_origine_single <- replace(M23_sum_admin3$admin3_origine_single, M23_sum_admin3$admin3_origine_single %in% conditions_og, replacement_og)
+
+condition <- c("Nyiragongo", "Nyanzale")
+replacement <- c("Nyirangongo", NA)
+
+M23_sum_admin3$admin3 <- replace(M23_sum_admin3$admin3, M23_sum_admin3$admin3 %in% condition, replacement)
+
+match(sort(unique(M23_sum_admin3$admin3_origine_single)), sort(unique(M23_sum_admin3$admin3))) # one unmatch (13th value of admin3_origine_single) -- Katoyo 
+
+#Does Katoyo from admin3_origine_single also doesn't exist in hz?
+match(sort(unique(M23_sum_admin3$admin3_origine_single)), sorted_unique_admin3_hz) #yes 
+
+#Turn Katoyo into NA
+conditions_og <- c("Katoyo")
+replacement_og <- c(NA)
+
+M23_sum_admin3$admin3_origine_single <- replace(M23_sum_admin3$admin3_origine_single, M23_sum_admin3$admin3_origine_single %in% conditions_og, replacement_og)
+
+#result - admin 3 origin and admin 3 has all matched with hz 
+match(sort(unique(M23_sum_admin3$admin3)), sorted_unique_admin3_hz)
+
+#download the cleaned version into CSV
+#write.csv(M23_sum_admin3,"~/Downloads/M23_sum_admin3.csv", row.names =TRUE)
+
+library(sf)
+
+drc_admin1 <- read_sf("/Users/yejikim/Documents/2025 Spring (4) /PPOL-6803_Data-Science/Final Project/cod_shp/cod_admbnda_adm1_rgc_itos_20190911.shp")
+drc_admin1_filtered <- drc_admin1 %>%
+  filter(ADM1_FR == "Nord-Kivu"| ADM1_FR== "Sud-Kivu"| ADM1_FR == "Ituri")
+
+#ADMIN 3
+#use stringr:: to only select the worked!
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = 
+           stringr::str_split(stringr::str_to_upper(admin3_origine), pattern = ",", simplify = TRUE)[,1])
+
+M23_clean_v3 <- M23_clean_v3 %>%
+  mutate(admin3_origine_single = stringr::str_split(stringr::str_to_title(admin3_origine_single), pattern = ";", simplify = TRUE)[,1])
+
+#summarize by ADMIN3
+M23_sum_admin3 <- M23_clean_v3 %>%
+  group_by(year, month, admin2, admin3, admin2_origine_single, admin3_origine_single) 
+
+#Remove NA in ADMIN3
+M23_sum_admin3 <- M23_sum_admin3 %>%
+  filter(!is.na(admin3))
+
+glimpse(M23_sum_admin3)
+
+### M23_gis 
+glimpse(M23_sum_admin3)
+
+M23_sum_admin3 <- M23_sum_admin3 %>%
+  filter(!is.na(admin3_origine_single)) %>%  # Use filter(!is.na()) instead of na.omit() inside a pipe
+  group_by(year, month, admin3, admin3_origine_single) %>%
+  summarise(
+    men = sum(men, na.rm = TRUE),
+    women = sum(women, na.rm = TRUE),
+    children = sum(children, na.rm = TRUE),
+    household = sum(household, na.rm = TRUE),
+    .groups = 'drop'  # optional: to ungroup automatically after summarise
+  ) %>%
+  mutate(individuals = men+women+children)
+
+glimpse(hz_map_simple) #we only need geom and name from this dataset 
+
+#join M23 dataset with Geom information of admin3
+#right join because we want to keep all observations of M23_sum_admin3
+M23_gis_destination <- hz_map_simple %>%
+  right_join(M23_sum_admin3, by = c('name'='admin3'))
+
+#change the column name back to admin 3_origin_single and geom into geom_origin
+colnames(M23_gis_destination)[colnames(M23_gis_destination) == 'name'] <- 'admin3'
+st_geometry(M23_gis_destination) <- "geom_des"
+
+#join M23 dataset with Geom information of admin3
+#right join because we want to keep all observations of M23_sum_admin3
+M23_gis_origin <- hz_map_simple %>%
+  right_join(M23_sum_admin3, by = c('name'='admin3_origine_single')) 
+
+#change the column name back to admin 3_origin_single and geom into geom_origin
+colnames(M23_gis_origin)[colnames(M23_gis_origin) == 'name'] <- 'admin3_origin_single'
+st_geometry(M23_gis_origin) <- "geom_og"
+
+M23_gis_origin<- M23_gis_origin %>% 
+  arrange(admin3, admin3_origin_single)
+
+M23_gis_destination <- M23_gis_destination %>%
+  arrange(admin3, admin3_origine_single)
+
+#merging two dataset 
+M23_gis <- M23_gis_origin
+M23_gis$geom_des <- M23_gis_destination$geom_des
+
+#centroid calculation
+M23_gis$des_centroid <- sf::st_centroid(M23_gis$geom_des)
+M23_gis$og_centroid <- sf::st_centroid(M23_gis$geom_og)
+
+M23_gis$dist <- st_distance(M23_gis$des_centroid, M23_gis$og_centroid, by_element = TRUE)
+
+#### $$ Df. M23_acled $$ 
+#we would like to extract month into a separate column and collapse into frequency
+setwd("/Users/yejikim/Documents/2025_Peloria/3.Admin_gis")
+hz_map <- st_read('DRC_healthzone.gpkg')
+sorted_unique_admin3_hz <- sort(unique(hz_map$name))
+hz_map_simple <- st_simplify(hz_map, dTolerance = 200)  # Adjust 100 as needed
+
+M23_acled <- drc_acled %>%
+  filter(actor1 == "M23: March 23 Movement")
+
+M23_acled$month <- format(M23_acled$event_date,"%m")
+
+#change month as numeric 
+M23_acled <- M23_acled %>%
+  mutate(month = as.numeric(month))
+
+#change civilian targeting into a logical argument, returning true or false 
+M23_acled <- M23_acled %>%
+  mutate(civilian_targeting = civilian_targeting == 'Civilian targeting' & !is.na(civilian_targeting))
+
+#### Code sample: M23_acled_sf
+M23_acled_sf <- M23_acled %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+
+M23_acled_sf <- st_join(M23_acled_sf, hz_map_simple, join = st_within)
+
+M23_acled_admin3 <- M23_acled_sf %>%
+  st_drop_geometry() %>%
+  group_by(year, month, name) %>%
+  summarise(
+    nconflicts = n(),
+    admin1 = first(admin1),
+    admin2 = first(admin2),
+    fatalities = sum(fatalities),
+    civilian_targeting = mean(civilian_targeting)
+  ) %>%
+  rename(admin3 = name)
+
+M23_acled_sf <- hz_map_simple %>%
+  left_join(M23_acled_admin3, by = c("name" = "admin3"))
+
+summary(M23_acled_sf$nconflicts)
+
+### Df. drc_acled_sf
+# 1. Merge summarized data (drc_acled) with shapefile (hz_map_simple)
+drc_acled_sf <- drc_acled %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326, remove = FALSE)
+
+drc_acled_sf <- st_join(drc_acled_sf, hz_map_simple, join = st_within)
+
+drc_acled_admin3 <- drc_acled_sf %>%
+  st_drop_geometry() %>%
+  group_by(year, name) %>%
+  summarise(
+    nconflicts = n(),
+    admin1 = first(admin1),
+    admin2 = first(admin2),
+  ) %>%
+  rename(admin3 = name)
+
+drc_acled_sf <- hz_map_simple %>%
+  left_join(drc_acled_admin3, by = c("name" = "admin3"))
+
+# Drop geometry from M23_gis
+M23_gis_clean <- M23_gis %>%
+  st_drop_geometry() %>%
+  group_by(year, month,admin3, admin3_origin_single)%>%
+  summarise(individuals = sum(individuals),
+            men = sum(men),
+            women = sum(women),
+            children=sum(children))
+
+# Perform left join to match conflict info to displacement data
+M23_final <- M23_gis_clean %>%
+  left_join(M23_acled_admin3, by = c("admin3_origin_single" = "admin3")) %>%
+  drop_na(admin3, admin3_origin_single) %>%
+  st_drop_geometry() %>%
+  group_by(year.x, month.x, admin3, admin3_origin_single) %>%
+  summarise(nconflicts = n(),
+            fatalities = sum(fatalities),
+            civilian_targeting=mean(civilian_targeting),
+            men = sum(men),
+            women = sum(women),
+            children = sum(children),
+            individuals= sum(individuals))
+            
+### Df.M23_final_laglead
+M23_final_laglead <- M23_final %>%
+  arrange(admin3_origin_single, year.x, month.x) %>%  # Very important: arrange first!
+  group_by(admin3_origin_single, year.x, month.x) %>%              
+  mutate(
+    # Lags (past months)
+    nconflicts_lag1 = lag(nconflicts, 1),
+    nconflicts_lag2 = lag(nconflicts, 2),
+    nconflicts_lag3 = lag(nconflicts, 3),
+    nconflicts_lag4 = lag(nconflicts, 4),
+    nconflicts_lag5 = lag(nconflicts, 5),
+    nconflicts_lag6 = lag(nconflicts, 6),
+    
+    fatalities_lag1 = lag(fatalities, 1),
+    fatalities_lag2 = lag(fatalities, 2),
+    fatalities_lag3 = lag(fatalities, 3),
+    fatalities_lag4 = lag(fatalities, 4),
+    fatalities_lag5 = lag(fatalities, 5),
+    fatalities_lag6 = lag(fatalities, 6),
+    
+    civilian_targeting_lag1 = lag(civilian_targeting, 1),
+    civilian_targeting_lag2 = lag(civilian_targeting, 2),
+    civilian_targeting_lag3 = lag(civilian_targeting, 3),
+    civilian_targeting_lag4 = lag(civilian_targeting, 4),
+    civilian_targeting_lag5 = lag(civilian_targeting, 5),
+    civilian_targeting_lag6 = lag(civilian_targeting, 6),
+    
+    # Leads (future months)
+    nconflicts_lead1 = lead(nconflicts, 1),
+    nconflicts_lead2 = lead(nconflicts, 2),
+    nconflicts_lead3 = lead(nconflicts, 3),
+    nconflicts_lead4 = lead(nconflicts, 4),
+    nconflicts_lead5 = lead(nconflicts, 5),
+    nconflicts_lead6 = lead(nconflicts, 6),
+    
+    fatalities_lead1 = lead(fatalities, 1),
+    fatalities_lead2 = lead(fatalities, 2),
+    fatalities_lead3 = lead(fatalities, 3),
+    fatalities_lead4 = lead(fatalities, 4),
+    fatalities_lead5 = lead(fatalities, 5),
+    fatalities_lead6 = lead(fatalities, 6),
+    
+    civilian_targeting_lead1 = lead(civilian_targeting, 1),
+    civilian_targeting_lead2 = lead(civilian_targeting, 2),
+    civilian_targeting_lead3 = lead(civilian_targeting, 3),
+    civilian_targeting_lead4 = lead(civilian_targeting, 4),
+    civilian_targeting_lead5 = lead(civilian_targeting, 5),
+    civilian_targeting_lead6 = lead(civilian_targeting, 6)
+  ) %>%
+  ungroup()
+
+#missing values
+sapply(1:6, function(i) {
+  mean(is.na(M23_final_laglead[[paste0("nconflicts_lag", i)]]))
+})
+
+sapply(1:6, function(i) {
+  mean(is.na(M23_final_laglead[[paste0("nconflicts_lead", i)]]))
+})
+
+### Impute Df. M23_final_laglead 
+
+library(missForest)
+library(dplyr)
+
+# Select only relevant lag/lead columns for imputation
+df_for_impute <- M23_final_laglead %>%
+  select(starts_with("nconflicts_lag"), starts_with("nconflicts_lead"),
+         starts_with("fatalities_lag"), starts_with("fatalities_lead"),
+         starts_with("civilian_targeting_lag"), starts_with("civilian_targeting_lead"))
+
+# Convert to plain data frame (if it's an sf object)
+df_for_impute_clean <- df_for_impute %>%
+  st_drop_geometry() %>%  # Removes geometry column if present
+  as.data.frame()
+
+# Ensure all columns are numeric
+df_for_impute_clean[] <- lapply(df_for_impute_clean, as.numeric)
+
+# Impute using missForest
+set.seed(123)
+imputed <- missForest(df_for_impute_clean)
+
+cols_to_replace <- names(df_for_impute_clean)
+
+M23_laglead_imputed <- M23_final_laglead
+
+# Extract completed dataset
+df_imputed <- imputed$ximp
+
+# Replace the corresponding columns in the original dataset
+M23_laglead_imputed[cols_to_replace] <- df_imputed[cols_to_replace]
+```
+
+# 4. Descriptive Analysis 
+## 4-1. Internally Displaced Population (Migration Pattern)
+
+### Figure 4.1  IOM Movement Origin Heatmap
+
+```{r}
+
+# Step 1: Calculate average individuals per origin *per year*
+M23_gis_og_avg <- M23_gis %>%
+  group_by(year, admin3_origin_single, geom_og) %>%
+  summarise(avg_individuals = mean(individuals, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 1: Calculate average individuals per origin *per year*
+M23_gis_og_avg <- M23_gis %>%
+  group_by(year, admin3_origin_single, geom_og) %>%
+  summarise(avg_individuals = mean(individuals, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 2: Plot with facet by year (Green color scheme)
+ggplot() +
+  geom_sf(data = drc_admin1_filtered,
+          fill = "gray95", color = "gray70", size = 0.3) +
+  geom_sf(data = M23_gis_og_avg,
+          aes(geometry = geom_og, fill = pmin(avg_individuals, 5000)),
+          color = "white", size = 0.2) +
+
+  scale_fill_gradient(
+    name = "Avg. Individuals",
+    low = "#e5f5e0",    # very light green
+    high = "#006d2c",   # dark green
+    na.value = "grey90",
+    limits = c(0, 5000)
+  ) +
+  labs(
+    title = "The Origin of Displaced Population",
+    subtitle = "Average number of individuals per admin3 (origin)",
+    fill = "Individuals",
+    caption = "Data: IOM Évaluation Rapide de Crise M23, Visual by Yeji"
+  ) +
+  facet_wrap(~ factor(year, levels = c(2023, 2024))) +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 13, hjust = 0.5),
+    plot.caption = element_text(size = 10, hjust = 0.5),
+    strip.text = element_text(size = 13, face = "bold"),
+    legend.position = "right"
+  )
+
+
+### Figure 4.2. IOM Movement Destination Heatmap
+library(ggplot2)
+library(dplyr)
+library(sf)
+
+# Step 1: Aggregate average individuals per admin3 (destination)
+M23_gis_dest_avg <- M23_gis %>%
+  group_by(year, admin3, geom_des) %>%
+  summarise(avg_individuals = mean(individuals, na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 2: Plot (with green color scale)
+ggplot() +
+   geom_sf(data = drc_admin1_filtered,
+          fill = "gray95", color = "gray70", size = 0.3) +
+  geom_sf(data = M23_gis_dest_avg, 
+          aes(geometry = geom_des, fill = pmin(avg_individuals, 5000)),
+          color = "white", size = 0.2) +
+
+  # Green color scale
+  scale_fill_gradient(
+    name = "Avg. Individuals",
+    low = "#e5f5e0",   # very light green
+    high = "#006d2c",  # dark forest green
+    na.value = "grey90",
+    limits = c(0, 5000)
+  ) +
+
+  labs(
+    title = "The Destination of Displaced Population (2023–2024)",
+    subtitle = "Average individuals received per Admin3 area",
+    caption = "Data: IOM Évaluation Rapide de Crise M23, Visual by Yeji",
+    fill = "Individuals"
+  ) +
+  facet_wrap(~ factor(year, levels = c(2023, 2024))) +   # Separate maps for 2023 and 2024
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    legend.position = "right",
+    strip.text = element_text(size = 12, face = "bold")
+  )
+
+```
+
+
+Two types of heat maps illustrate displacement patterns: the origin heatmap (Figure 4.1) and the destination heatmap (Figure 4.2). These visualizations, based on IOM Rapid Conflict Response data, depict the monthly average movement of IDPs at the admin 3 (health zone) level. The origin heatmap shows heavy out-migration from conflict-prone areas along the Rwanda–DRC border, particularly the southern part of North Kivu. Mweso (14,029 monthly displacement), Kibirizi (7,471), and Kirotshe (7,314) were top three highest displacement origin. 
+
+The destination heatmap reveals that displaced populations moved progressively farther inland, away from immediate conflict zones, seeking relative safety in less affected regions such as Minova (33,048), Kalehe (31,124) and Kibirizi (16,415). We find that the displacement disperses to a vicinity province, and shown in particular example of Kibirizi, sometimes people escape conflict from a origin to another conflict-prone healthzone, and in the end, having to fled secondly to vincinity zone. This suggests that displacement is not a single movement, but could be prolonged movement dispersed by months of pause. 
+
+### Figure 4.3. Displacement Flow 
+```{r, echo = F}
+library(dplyr)
+library(networkD3)
+
+# Step 1: Aggregate flow data
+flow_data <- M23_gis %>%
+  group_by(admin3_origin_single, admin3, .drop = FALSE) %>%
+  summarise(average_individuals = mean(individuals, na.rm = TRUE)) %>%
+  filter(admin3_origin_single != admin3) %>%
+  ungroup()
+
+# Step 2: Keep top 20 flows
+top_flows <- flow_data %>%
+  arrange(desc(average_individuals)) %>%
+  slice_head(n = 20) %>%
+  st_drop_geometry()
+
+# Step 3: Create node list with prefixed names (for layout)
+nodes <- data.frame(
+  name = c(
+    paste0("o_", unique(top_flows$admin3_origin_single)),
+    paste0("d_", unique(top_flows$admin3))
+  )
+)
+
+# Step 4: Add readable label column without prefix
+nodes$label <- gsub("^[od]_", "", nodes$name)
+
+# Step 4.5: Create group column
+nodes$group <- ifelse(nodes$label %in% c("Rwanguba", "Kalehe", "Minova"), "South Kivu", "North Kivu")
+
+# Step 5: Match IDs based on prefixed names
+top_flows <- top_flows %>%
+  mutate(
+    IDsource = match(paste0("o_", admin3_origin_single), nodes$name) - 1,
+    IDtarget = match(paste0("d_", admin3), nodes$name) - 1
+  )
+
+# Step 6: Plot Sankey diagram
+sankeyNetwork(
+  Links = top_flows,
+  Nodes = nodes,
+  Source = "IDsource",
+  Target = "IDtarget",
+  Value = "average_individuals",
+  NodeID = "label",
+  NodeGroup = "group",         # <<< Add this line
+  sinksRight = TRUE,
+  fontSize = 13,
+  nodeWidth = 40,
+  nodePadding = 20,
+  colourScale = JS("d3.scaleOrdinal()
+                     .domain(['South Kivu', 'North Kivu'])
+                     .range(['#66C2A5', '#FC8D62'])")  # green for South Kivu, orange for North Kivu
+)
+
+```
+
+Figure 4.3 integrates information from the two heatmaps and visualizes the top ten displacement movements, measured as average monthly flows at the admin 3 (health zone) level, from conflict-affected origin zones to destination zones. Zones coded in green represent North Kivu, while those in orange indicate South Kivu province.
+
+Consistent with previous findings, key origin zones include Mweso, Kirotshe, and Kibirizi, while major destination zones include Kalehe, Minova (both in South Kivu), and Kayna. This migration pattern highlights how escalating violence in health zones of North Kivu triggered large-scale and fragmented internal movement which is often toward neighboring provinces, but in some cases, such as Kibirizi, within the same conflict-affected zone.
+
+### Figure 4.4. Average Travel Distance 
+```{r, echo = F}
+# Step 1: Compute total distance traveled
+M23_final_dist <- M23_gis %>%
+  mutate(dist = drop_units(dist),
+         totaldist = dist * individuals ) 
+
+# Step 2: Group by year/month and compute total distance & individuals
+monthly_avg_dist <- M23_final_dist %>%
+  group_by(year, month) %>%
+  summarise(
+    totaldist = sum(totaldist, na.rm = TRUE),
+    totalind = sum(individuals, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    avg_distance = totaldist / totalind,
+    # Step 3: Create date column for plotting
+    date = as.Date(paste(year, month, "01", sep = "-"))
+  )
+
+summary(monthly_avg_dist$avg_distance)
+
+# Step 4: Plot
+ggplot(monthly_avg_dist, aes(x = date, y = avg_distance/1000)) +
+  geom_col(
+    fill = "#2a9d8f",          # deep teal green (modern, clean)
+    width = 25
+  ) +
+  labs(
+    title = "Average Travel Distance per Month",
+    subtitle = "People on average travel 35km (Median 32km) in response to M23",
+    caption = "Data: IOM Évaluation Rapide de Crise M23, Visual by Yeji",
+    x = "Date",
+    y = "Average Distance (km)"
+  ) +
+  scale_x_date(
+    date_labels = "%b %Y",
+    date_breaks = "1 month"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 13, face = "italic", hjust = 0.5),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major.y = element_line(color = "gray90"),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background = element_rect(fill = "white", color = NA)
+  )
+
+```
+
+Using centroid-to-centroid calculations between origin and destination health zones, the average monthly travel distance of internally displaced persons was estimated. As shown in Figure 4.3, individuals displaced by M23-related conflict traveled an average of 76 kilometers per month (median: 59 kilometers) between October 2023 and July 2024. Travel distances remained relatively stable throughout most of this period, with a sharp spike in July 2024. This surge likely reflects either an intensification of conflict or increased barriers to local relocation, leading to longer-distance displacement that month.
+
+### Figure 4.5. Displaced Population Demographics
+
+```{r, echo = F}
+visual_4 <- M23_gis %>%
+  dplyr::group_by(year, month) %>%
+  dplyr::summarize(men=mean(men),
+            women = mean(women),
+            children = mean(children))
+
+summary(visual_4)
+
+visual_4_long <- visual_4 %>%
+  pivot_longer(cols = c(men, women, children), names_to = "group", values_to = "count") %>%
+  mutate(date = paste(year, month, sep = "-"),
+         count= count/100)
+
+library(waffle)
+
+# Step 2: Waffle Plot
+ggplot(visual_4_long, aes(fill = group, values = count)) +
+  waffle::geom_waffle(n_rows = 15, color = "white", flip = TRUE, na.rm = TRUE) +
+  facet_wrap(~date, ncol = 3, scales = "fixed") +
+  scale_fill_manual(
+    values = c("men" = "#457B9D", "women" = "#E76F51", "children" = "#2A9D8F"),
+    name = "Group"
+  ) +
+  labs(
+    title = "M23 Mean Displacement by Month",
+    subtitle = "Each square = 100ppl",
+    caption = "Data: IOM Évaluation Rapide de Crise M23, Visual by Yeji",
+    x = NULL,
+    y = NULL
+  )
+```
+
+Figure 4.5 indicate that women and children consistently made up the majority of the displaced population. On average, 2,373 women and 1,817 men were displaced each month between 2021 and 2025. This demographic imbalance depicts the particular vulnerabilities faced by women and children in displacement contexts, reinforcing the need for protection-centered and gender-sensitive humanitarian responses.
+
+## 4-2. Internal Conflict 
+
+To contextualize the displacement patterns described above, this section analyzes the underlying conflict dynamics over the same period. While forced migration is shaped by multiple factors, conflict remains the most immediate and recurrent trigger for displacement across the DRC. Drawing on ACLED data, the following visualizations examine the frequency, geography, and typology of conflict events from 2021 to 2025. By mapping trends in both intensity and spatial distribution.
+
+### Figure 4.6. Evolution of Conflict Events by Type
+```{r, echo = F}
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+
+# Filter data
+M23_filtered <- M23_acled %>%
+  filter(event_date >= as.Date("2023-10-01") & event_date <= as.Date("2024-07-31"))
+
+# Create year-month column
+M23_filtered <- M23_filtered %>%
+  mutate(year_month = format(event_date, "%Y-%m"))
+
+# Summarize by year_month and event_type
+df_monthly <- M23_filtered %>%
+  group_by(year_month, event_type) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  mutate(year_month = as.Date(paste0(year_month, "-01")))  # convert to date for x-axis
+
+# Plot stacked area chart
+ggplot(df_monthly, aes(x = year_month, y = n, fill = event_type)) +
+  geom_area(alpha = 0.9, size = 0.5, color = "white") +
+  scale_x_date(date_labels = "%b %Y", date_breaks = "1 month") +
+  labs(
+    title = "Monthly M23 Conflict Events by Type",
+    subtitle = "October 2023 to July 2024",
+    x = "Month",
+    y = "Number of Conflict Events",
+    fill = "Event Type"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+Figure 4.6 illustrates that total conflict events peaked in 2022, primarily driven by battles and violence against civilians. All conflict categories experienced a consistent decline thereafter, with 2025 recording the lowest overall conflict levels during the study period. This downward trend may indicate either a genuine de-escalation of conflict or shifts in conflict reporting.
+
+### Figure 4.7. M23 proportion
+```{r, echo = F}
+# Step 1: Summarize conflict counts by province
+df_admin1 <- M23_acled %>%
+  group_by(admin1) %>%
+  summarise(nconflicts = n()) %>%
+  ungroup() %>%
+  mutate(
+    proportion = nconflicts / sum(nconflicts),
+    label = paste0(admin1, "\n", nconflicts, " (", round(proportion * 100, 1), "%)"),
+    ypos = cumsum(proportion) - 0.5 * proportion  # for label positioning
+  )
+
+# Step 2: Create pie chart
+ggplot(df_admin1, aes(x = "", y = proportion, fill = admin1)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_label_repel(
+    aes(y = ypos, label = label),
+    size = 4,
+    nudge_x = 1,
+    segment.size = 0.3,
+    show.legend = FALSE
+  ) +
+  labs(
+    title = "Proportion of M23 Conflicts by Province (2021–2025)",
+    subtitle = "North Kivu had 1,691 conflicts, accounting for 93.2%",
+    fill = "Province"
+  ) +
+  scale_fill_manual(values = c("Nord-Kivu" = "indianred", "Sud-Kivu" = "rosybrown", "Ituri" = "lightgray")) +
+  theme_void(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+
+```
+
+According to the summary, there has been 1815 conflicts recorded since November 07, 2021 to April 03, 2025, 92% (1691) of the conflicts happening in North Kivu and 7% (144) in South Kivu and 1 incident in Ituri. 
+
+Since we are interested in North Kivu, let's map the yearly distribution of number of M23 conflicts. 
+
+### Figure 4.8. yearly summary of conflicts in NK
+```{r, echo = F}
+# Summarize yearly conflicts in North Kivu
+df_nk_yearly <- M23_acled %>%
+  filter(admin1 == "Nord-Kivu") %>%
+  group_by(year) %>%
+  summarise(nconflicts = n())
+
+ggplot(df_nk_yearly, aes(x = factor(year), y = nconflicts)) +
+  geom_col(fill = "indianred", width = 0.6) +
+  geom_text(
+    aes(label = nconflicts),
+    vjust = -0.3,         # Slightly above the bar but not too far
+    size = 5
+  ) +
+  expand_limits(y = max(df_nk_yearly$nconflicts) * 1.1) +  # Add 10% buffer at top
+  labs(
+    title = "Yearly Number of M23 Conflict Events in North Kivu (2021–2025)",
+    x = "Year",
+    y = "Number of Conflict Events"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+Figure 4.8 visualizes the annual trend in M23-related conflict events in North Kivu from 2021 to 2025. The chart shows a dramatic escalation beginning in 2022, with the number of events rising from just 12 in 2021 to a peak of 519 in 2023. While there is a slight decrease in 2024 (512 events), the conflict activity remains intense. A notable decline appears in 2025, dropping to 285 events, yet still far above pre-2022 levels. This trend suggests a sustained period of instability concentrated in North Kivu, followed by a potential but uncertain de-escalation.
+
+### Figure 4.9 Conflict Hotspots by Territory
+```{r, echo = F}
+M23_acled_admin2 <- M23_acled %>%
+  group_by(admin1, admin2) %>%
+  summarise(nconflicts=n())
+
+M23_acled_admin2 <- M23_acled %>%
+  group_by(year, month, admin2) %>%
+  summarise(nconflicts = n(),
+            admin1 = admin1)
+
+treemap(M23_acled_admin2, 
+        index = c("admin1", "admin2"),   
+        vSize = "nconflicts",             
+        vColor = "admin1",                 
+        type = "categorical",              
+        palette = c("indianred1", "indianred3", "indianred4"), # <<< three shades of Indian Red
+        fontsize.labels = c(18, 12),
+        fontcolor.labels = c("white", "black"),
+        fontface.labels = c(2, 1),
+        bg.labels = 0,
+        align.labels = list(c("left", "top"), c("center", "center")),
+        border.col = "white",
+        border.lwds = c(4, 2),
+        title = "Territories of M23 Provinces (2023–2024)",
+        fontsize.title = 15,
+        position.legend = "none" # <<< remove legend (no need since colors are intuitive now)
+)
+
+```
+
+Figure 4.9. Territorial Concentration of M23 Conflict Events (2023–2024)
+This treemap illustrates the territorial concentration of M23-related conflict events at the administrative level 2 (territory level). The conflict was highly localized, with a disproportionately large number of events occurring in a few key territories—most notably Rutshuru and Masisi in North Kivu. Other territories such as Goma, Walikale, and Lubero also experienced notable levels of violence, while areas in South and Ituri provinces appear marginal. The visualization highlights that conflict intensity was not evenly distributed across the region, but rather concentrated in specific high-risk zones.
+
+
+### Figure 4.10. admin 3 changes for M23 (2023, 2024)
+```{r, echo = F}
+library(tidyverse)
+library(patchwork)
+
+### Df. M23_acled_sum_wide 
+# 1. Summarize and reshape data
+M23_acled_sum_wide <- M23_acled_admin3 %>%
+  filter(!is.na(admin3)) %>%
+  pivot_wider(
+    names_from = year,
+    values_from = nconflicts,
+    names_prefix = "nconflicts_"
+  ) %>%
+  group_by(admin3) %>%
+  summarise(
+    nconflicts_2023 = sum(nconflicts_2023, na.rm = TRUE),
+    nconflicts_2024 = sum(nconflicts_2024, na.rm = TRUE)
+  ) %>%
+  filter(!is.na(nconflicts_2023) & nconflicts_2023 > 0 & !is.na(nconflicts_2024))
+
+# 2. Define a consistent order
+admin3_order <- M23_acled_sum_wide %>%
+  mutate(gap = nconflicts_2024 - nconflicts_2023) %>%
+  arrange(nconflicts_2023) %>%
+  pull(admin3)
+
+# 3. Prepare long-form data for the main plot
+df_long <- M23_acled_sum_wide %>%
+  pivot_longer(cols = starts_with("nconflicts_"), names_to = "year", values_to = "value") %>%
+  mutate(
+    year = dplyr::recode(year, "nconflicts_2023" = "2023", "nconflicts_2024" = "2024"),
+    year = factor(year, levels = c("2023", "2024")),
+    admin3 = factor(admin3, levels = admin3_order)
+  )
+```
+
+```{r, echo = F}
+# 4. Main plot
+p_main <- ggplot(df_long, aes(x = value, y = admin3, group = admin3)) +
+  geom_line(color = "gray80", linewidth = 3.2) +
+  geom_point(aes(color = year, shape = year), size = 3) +
+  scale_color_manual(values = c("2023" = "#1f77b4", "2024" = "#ff7f0e")) +
+  scale_shape_manual(values = c("2023" = 16, "2024" = 17)) +
+  labs(
+    x = "Number of Conflicts",
+    y = "Admin3 Area",
+    title = "Change in Number of M23 Conflicts (2023 vs 2024)",
+    color = "Year",
+    shape = "Year"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(size = 12, face = "bold"),
+    axis.title.y = element_text(size = 12, face = "bold"),
+    axis.text.y = element_text(size = 10, hjust = 1),
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+# 5. Gap annotation
+df_gap <- M23_acled_sum_wide %>%
+  mutate(
+    gap = nconflicts_2024 - nconflicts_2023,
+    admin3 = factor(admin3, levels = admin3_order),
+    gap_party_max = case_when(
+      gap > 0 ~ "↑",
+      gap < 0 ~ "↓",
+      TRUE ~ "="
+    ),
+    gap_label = paste0(if_else(gap > 0, "+", ""), gap, gap_party_max)
+  )
+
+p_gap <- ggplot(df_gap, aes(x = 0, y = admin3)) +
+  geom_text(aes(label = gap_label, color = gap_party_max),
+            fontface = "bold", size = 3.2, hjust = 0) +
+  theme_void() +
+  coord_cartesian(xlim = c(0, 1)) +
+  theme(
+    plot.margin = ggplot2::margin(0, 0, 0, 0),
+    panel.background = element_rect(fill = "#EFEFE3", color = NA),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("↑" = "#BF2F24", "↓" = "#436685", "=" = "gray50"))
+
+# 6. Final combined plot
+final_plot <- p_main + p_gap + plot_layout(widths = c(4, 1))
+
+final_plot
+```
+
+Figure 4.10. Change in Number of M23 Conflicts by Admin3 Area (2023 vs. 2024)
+This figure highlights how M23 conflict activity shifted at the local level between 2023 and 2024. While several hotspots such as Masisi, Birambizo, and Rutshuru experienced notable declines (e.g., -55, -47, -34 conflicts, respectively), other areas such as Kibua and Kirotshe saw increases of up to +36 and +31 conflict events, respectively. These changes suggest that while overall conflict volume decreased slightly, violence became more dispersed, with previously less-affected zones becoming more active. The shifting geography of conflict underscores the need for localized monitoring and response strategies.
+
+### Figure 4.11 connection between drc and M23 
+```{r, echo = F}
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Create a new column labeling whether it's M23 or Other
+
+
+# Step 2: Count number of conflicts per year and conflict type
+conflict_counts <- drc_acled_labeled %>%
+  group_by(year = lubridate::year(event_date), conflict_type) %>%
+  summarise(nconflicts = n(), .groups = 'drop')
+
+# Step 3: Plot
+ggplot(conflict_counts, aes(x = factor(year), y = nconflicts, fill = conflict_type)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Conflicts by Year: M23 vs Others",
+       x = "Year",
+       y = "Number of Conflicts",
+       fill = "Conflict Type",
+       caption = "Source: ACLED API, Visual by Yeji") +
+  theme_minimal()
+```
+
+Figure 4.11. Yearly Comparison of M23 vs. Other Conflicts (2021–2025)
+This figure compares the annual number of conflict events attributed to the M23 group versus all other actors in the DRC from 2021 to 2025. While overall conflict levels have gradually declined since their 2022 peak, M23-related activity has taken up a larger share of total conflicts in recent years. Notably, in 2023 and 2024, M23 violence comprised a visible portion of total conflict, suggesting a growing role in the broader security landscape. By 2025, total conflict volumes dropped significantly, yet M23 incidents remained proportionally high, highlighting their sustained operational presence even amid broader de-escalation.
+
+### Figure 4.12. Overall Conflict Intensity 
+```{r, echo = F}
+# -------------------------------
+# STEP 1: Filter & Classify Bins
+# -------------------------------
+drc_acled_sf_clean <- drc_acled_sf %>%
+  filter(
+    !is.na(year),
+    admin1 %in% c("Nord-Kivu", "Sud-Kivu", "Ituri")
+  ) %>%
+  mutate(
+    conflict_bin = case_when(
+      nconflicts >= 35 ~ "35+ (High)",
+      nconflicts >= 26 ~ "26–34 (Medium)",
+      nconflicts >= 5  ~ "5–25 (Low)",
+      nconflicts >= 1  ~ "1–4 (Very Low)",
+      TRUE ~ NA_character_
+    ),
+    conflict_bin = factor(conflict_bin, levels = c(
+      "1–4 (Very Low)", "5–25 (Low)", "26–34 (Medium)", "35+ (High)"
+    ))
+  )
+
+# Check distribution (optional)
+summary(drc_acled_sf_clean$nconflicts)
+table(drc_acled_sf_clean$conflict_bin, useNA = "ifany")
+
+# -------------------------------
+# STEP 2: Plot Conflict Map by Bin
+# -------------------------------
+p <- ggplot() +
+  # Base layer: provincial borders
+  geom_sf(data = drc_admin1_filtered,
+          fill = "gray90", color = "gray70", size = 0.3) +
+
+  # Conflict overlay by intensity bin
+  geom_sf(data = drc_acled_sf_clean,
+          aes(geometry = geom, fill = conflict_bin),
+          color = "white", size = 0.2) +
+
+  # Custom fill scale
+  scale_fill_manual(
+    name = "Conflict Level",
+    values = c(
+      "1–4 (Very Low)" = "#FFDAB9",    # light peach
+      "5–25 (Low)"     = "#FA8072",    # salmon
+      "26–34 (Medium)" = "#CD5C5C",    # indianred
+      "35+ (High)"     = "#8B0000"     # dark red
+    ),
+    na.value = "gray90",
+    drop = FALSE
+  ) +
+
+  # Titles and layout
+  labs(
+    title = "Conflict Intensity Across Nord-Kivu, Sud-Kivu, and Ituri (2021–2025)",
+    subtitle = "Average yearly conflict at the health zone level is 26, with a maximum of 334",
+    fill = "Conflicts",
+    caption = "Data: ACLED API, Visual by Yeji"
+  ) +
+
+  # Year-wise facets
+  facet_wrap(~ factor(year, levels = c(2021, 2022, 2023, 2024, 2025))) +
+
+  # Theme settings
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 10, face = "italic", hjust = 0.5),
+    plot.caption = element_text(size = 10, hjust = 0.5),
+    strip.text = element_text(size = 10, face = "bold"),
+    legend.position = "right"
+  )
+
+# Print plot
+print(p)
+
+
+```
+
+### Figure 4.13. M23 Conflict Heatmap
+```{r, echo = F}
+# Correct conflict bin levels
+M23_acled_sf_clean <- M23_acled_sf %>%
+  filter(!is.na(year)) %>%
+  mutate(
+    conflict_bin = case_when(
+      nconflicts >= 21 ~ "21+ (High)",
+      nconflicts >= 5 ~ "5–20 (Medium)",
+      nconflicts >= 2 ~ "2–4 (Low)",
+      nconflicts == 1 ~ "1 (Very Low)",
+      TRUE ~ NA_character_
+    ),
+    conflict_bin = factor(conflict_bin, levels = c(
+      "1 (Very Low)", "2–4 (Low)", "5–20 (Medium)", "21+ (High)"
+    ))
+  )
+
+# Then the plotting
+p2 <- ggplot() +
+  geom_sf(data = drc_admin1_filtered,
+          fill = "gray90", color = "gray70", size = 0.3) +
+  geom_sf(data = M23_acled_sf_clean,
+          aes(geometry = geom, fill = conflict_bin),
+          color = "white", size = 0.2) +
+  scale_fill_manual(
+    name = "Conflict Level",
+    values = c(
+      "1 (Very Low)" = "#FFDAB9",
+      "2–4 (Low)" = "#FA8072",
+      "5–20 (Medium)" = "#CD5C5C",
+      "21+ (High)" = "#8B0000"
+    ),
+    na.value = "gray90",
+    drop = FALSE
+  ) +
+  labs(
+    title = "Conflict Intensity Across Selected Provinces (2021–2025)",
+    subtitle = "Provinces: Nord-Kivu, Sud-Kivu, Ituri",
+    fill = "Conflicts",
+    caption = "Data: ACLED API, Visual by Yeji"
+  ) +
+  facet_wrap(~ factor(year, levels = c(2021, 2022, 2023, 2024, 2025))) +
+  theme_minimal() +
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 11, face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(size = 10, hjust = 0.5),
+    plot.caption = element_text(size = 10, hjust = 0.5),
+    strip.text = element_text(size = 10, face = "bold"),
+    legend.position = "right"
+  )
+
+p2
+
+```
+
+Figure 4.11 reveals evolving spatial patterns of conflict across eastern DRC, with intensity peaking in 2022 and 2023 before declining by 2025. These visualizations, based on quartile distributions of conflict events, show that violence remained heavily concentrated in Nord-Kivu, Sud-Kivu, and Ituri, consistent with long-standing instability in these provinces. The resurgence of the M23 rebellion in late 2021, originating along the Rwandan border in North Kivu, played a pivotal role in reshaping the conflict landscape. Initially localized, M23-linked violence escalated rapidly and spread inland through 2022 and 2023, as shown in Figure 4.12, coinciding with allegations of external support from Rwanda—a dynamic widely noted in recent scholarship. By 2023, conflict density reached its peak, with numerous health zones experiencing severe violence.
+
+However, both the intensity and geographic scope of conflict began to subside by 2024, with a marked reduction in the number of severely affected zones by 2025. Importantly, spatial analysis highlights substantial heterogeneity across health zones—not only in the scale of violence but also in its persistence. While some zones remained chronically affected, others saw only episodic conflict or rapid de-escalation. Disaggregated data confirm that M23 was a primary driver of the mid-period conflict surge, although its share of total incidents declined in the later years. These temporal and spatial dynamics underscore how conflict spreads unevenly, influenced by local geography, armed group presence, and political factors. Together, these findings highlight the value of subnational, time-sensitive analysis in capturing the complexity of conflict trajectories in the DRC.
+
+# 5. Prediction 
+## 5-1. Regression
+
+```{r, echo = F}
+# Step 1: Get all column names
+predictors <- names(M23_laglead_imputed)
+
+# Step 2: Select relevant predictors (contemporaneous + lag/lead 1-6)
+lag_lead_vars <- predictors[grepl("^(nconflicts|fatalities|civilian_targeting)_(lag|lead)[1-6]$", predictors)]
+current_vars <- c("nconflicts", "fatalities", "civilian_targeting")
+
+# Step 3: Combine all predictors
+all_predictors <- c(current_vars, lag_lead_vars)
+
+# Step 4: Build formula
+formula_lm <- as.formula(paste("individuals ~", paste(all_predictors, collapse = " + ")))
+
+# Step 5: Fit model
+lm_indiv <- lm(formula_lm, data = M23_laglead_imputed)
+
+# Step 6: Summary
+summary(lm_indiv)
+
+# Step 7: Check for multicollinearity 
+vif_vals <- vif(lm_indiv)
+print(vif_vals)
+```
+
+The linear regression model demonstrates poor performance and limited utility for inference or prediction. The R-squared is only 0.041, indicating that the model explains just 4.1% of the variance in displacement, and the adjusted R-squared drops to 0.013, suggesting that the inclusion of many predictors does not meaningfully improve explanatory power and may instead reflect overfitting. Moreover, none of the current, lagged, or lead conflict-related variables are statistically significant, with nearly all p-values well above conventional thresholds. Several coefficients—particularly those related to civilian targeting—exhibit extremely large standard errors, pointing to issues of multicollinearity, data sparsity, and overparameterization. Together, these issues indicate that the model is unstable and unsuitable for drawing substantive conclusions.
+
+## 5-2. Machine Learning Model 
+### 5-2-1 LASSO
+#### Prepare data
+```{r, echo = F}
+# Step 1: Construct the model matrix and identify rows used
+X <- model.matrix(formula_lm, data = M23_laglead_imputed)[, -1]  # removes intercept
+Y <- M23_laglead_imputed$individuals
+
+# Step 2: Match rows — keep only rows that weren't dropped by model.matrix
+valid_rows <- as.numeric(rownames(X))  # model.matrix keeps rownames from original data
+Y <- Y[valid_rows]
+
+lasso_model <- cv.glmnet(X, Y, alpha = 1)
+plot(lasso_model)
+coef(lasso_model, s = "lambda.min")
+
+coef(lasso_model, s = "lambda.min")  # for best predictive model
+
+```
+
+### Figure 5.1 Selected Variables from LASSO  
+```{r, echo = F}
+# Step 1: Extract non-zero coefficients from LASSO
+selected_coefs <- coef(lasso_model, s = "lambda.min")
+selected_df <- as.data.frame(as.matrix(selected_coefs)) %>%
+  rownames_to_column("variable") %>%
+  rename(coefficient = s1) %>%  # 's1' is the default colname from coef()
+  filter(variable != "(Intercept)", coefficient != 0) %>%
+  mutate(coef_thousands = coefficient / 1000) %>%
+  filter(abs(coef_thousands) >= 50) 
+
+# Step 2: Reorder for clearer plotting
+selected_df <- selected_df %>%
+  arrange(desc(abs(coefficient)))  # sort by importance
+
+# Step 3: Plot
+ggplot(selected_df, aes(x = reorder(variable, coefficient), y = coefficient)) +
+  geom_col(fill = "indianred3") +
+  coord_flip() +
+  labs(
+    title = "Selected Variables from LASSO (lambda.min)",
+    subtitle = "Only predictors with non-zero coefficients",
+    x = "Predictor",
+    y = "Coefficient"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+Then, adjusting for multicollinearity, LASSO Regression is used. 
+
+Figure 5.1 presents the variables selected by LASSO regression with non-zero coefficients, indicating predictors most strongly associated with individuals displacement. For instance, the proportion of civilian targeted conflicts one month ahead and before show strong positive associations with displaced individuals. On the other hand, some lead variables (e.g., civilian_targeting_lead6) carry negative coefficients, potentially reflecting predictive limits or compensatory dynamics over longer horizons. This supports the idea that civilian harm is a more immediate and significant driver of displacement than other conflict metrics like fatalities or battle frequency, which were not retained by the LASSO model.
+
+Next, would LASSO Regression show the same predictor strenghts if we train the model using test and train dataset? 
+
+#### Split into test and train dataset
+```{r, echo = F}
+# Step 1: Drop rows with missing data in relevant variables
+model_data <- M23_laglead_imputed %>%
+  select(individuals, all_of(all_predictors)) %>%
+  drop_na()
+
+# Step 2: Split into train/test
+set.seed(42)
+n <- nrow(model_data)
+train_idx <- sample(1:n, size = 0.8 * n)
+
+train_data <- model_data[train_idx, ]
+test_data  <- model_data[-train_idx, ]
+
+# Step 3: Create model matrices for LASSO
+X_train <- model.matrix(formula_lm, data = train_data)[, -1]
+y_train <- train_data$individuals
+
+X_test <- model.matrix(formula_lm, data = test_data)[, -1]
+y_test <- test_data$individuals
+```
+
+#### Fit Lasso Model using cross validation
+```{r, echo = F}
+cv_lasso <- cv.glmnet(X_train, y_train, alpha = 1)
+best_lambda <- cv_lasso$lambda.min
+
+coef(cv_lasso, s = best_lambda)
+pred_lasso <- predict(cv_lasso, s = best_lambda, newx = X_test)
+
+# RMSE (Root Mean Squared Error)
+rmse <- sqrt(mean((pred_lasso - y_test)^2))
+
+# R-squared
+sst <- sum((y_test - mean(y_test))^2)
+sse <- sum((pred_lasso - y_test)^2)
+rsq <- 1 - sse / sst
+
+cat("Test RMSE:", round(rmse, 2), "\n")
+cat("Test R-squared:", round(rsq, 3), "\n")
+```
+
+#### Predict 
+```{r, echo = F}
+# Predict on test data
+y_pred <- predict(cv_lasso, newx = X_test, s = best_lambda)
+
+# Evaluate
+rmse <- sqrt(mean((y_test - y_pred)^2))
+mae <- mean(abs(y_test - y_pred))
+rss <- sum((y_test - y_pred)^2)
+tss <- sum((y_test - mean(y_test))^2)
+r_squared <- 1 - rss / tss
+
+# Print results
+cat("✅ Lasso Model Performance on Test Set:\n")
+cat("RMSE:", round(rmse, 2), "\n")
+cat("MAE:", round(mae, 2), "\n")
+cat("R²:", round(r_squared, 4), "\n")
+
+```
+
+The R² value is very low, indicating that the model explains only about 4.4% of the variance in the outcome variable. The high RMSE and MAE suggest that the predictions deviate substantially from actual values, which means the model has poor predictive power in this case. Low predictive power is shown in the variable importance. The results indicates that the coefficients are different from LASSO Regression. 
+
+number of conflicts of one month after and number of conflicts are positively associated, implying past and current conflict events might increase the outcome (e.g., displacement or violence magnitude, depending on your target variable). All other variables were penalized to zero and excluded, showing Lasso's regularization effect in reducing model complexity.
+
+```{r, echo = F}
+lasso_coef_test <- coef(cv_lasso, s = best_lambda)
+as.data.frame(as.matrix(lasso_coef_test)) %>%
+  rownames_to_column("term") %>%
+  filter(term != "(Intercept)", s1 != 0) %>%
+  arrange(desc(abs(s1)))
+
+# Convert Lasso coefficients to data frame
+lasso_df_test <- as.data.frame(as.matrix(lasso_coef_test)) %>%
+  rownames_to_column("term") %>%
+  rename(coef = s1) %>%
+  filter(term != "(Intercept)", coef != 0) %>%
+  mutate(coef_thousands = coef / 1000) 
+```
+```{r}
+# Step 3: Plot using lasso_df_test
+ggplot(lasso_df_test, aes(x = reorder(term, coef_thousands), y = coef_thousands)) +
+  geom_col(fill = "#E76F51") +
+  coord_flip() +
+  labs(
+    title = "Top LASSO-Selected Predictors of Displacement",
+    subtitle = "Predictors with coefficients ≥ 50 (in thousands)",
+    x = "Lag/Lead Variable",
+    y = "Coefficient (in Thousands)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+  )
+```
+
+## 5-2-2. Random Forest
+### M23_final_laglead 
+```{r, echo = F}
+# Load required packages
+library(randomForest)
+library(dplyr)
+library(caret)
+
+# Step 1: Prepare your dataset (remove rows with NA in relevant variables)
+df_rf <- M23_laglead_imputed %>%
+  select(individuals, starts_with("nconflicts"), starts_with("fatalities"),
+         starts_with("civilian_targeting")) %>%
+  na.omit()
+
+# Step 2: Create 80/20 training-test split
+set.seed(42)
+train_index <- createDataPartition(df_rf$individuals, p = 0.8, list = FALSE)
+train_rf <- df_rf[train_index, ]
+test_rf <- df_rf[-train_index, ]
+
+# Step 3: Train Random Forest model
+set.seed(42)
+rf_model <- randomForest(
+  individuals ~ .,  # Use all other variables as predictors
+  data = train_rf,
+  ntree = 500,
+  importance = TRUE
+)
+
+# Step 4: Predict on test set
+predictions_rf <- predict(rf_model, newdata = test_rf)
+
+# Step 5: Evaluate model performance
+rmse_rf <- sqrt(mean((predictions_rf - test_rf$individuals)^2))
+cat("Test RMSE:", round(rmse_rf, 2), "\n")
+
+# Step 6: Plot variable importance
+varImpPlot(rf_model, main = "Variable Importance (Random Forest)")
+
+```
+
+## 5-2-3. Regression Tree
+### M23_final_laglead ALL
+
+```{r, echo = F}
+# Load required packages
+library(rpart)
+library(rpart.plot)
+library(dplyr)
+library(caret)
+
+# Step 1: Prepare your data
+df_tree <- M23_laglead_imputed %>%
+  select(individuals, starts_with("nconflicts"), starts_with("fatalities"), starts_with("civilian_targeting")) %>%
+  na.omit()
+
+# Step 2: Train/test split
+set.seed(42)
+train_idx <- createDataPartition(df_tree$individuals, p = 0.8, list = FALSE)
+train_tree <- df_tree[train_idx, ]
+test_tree <- df_tree[-train_idx, ]
+
+# Step 3: Fit the regression tree
+tree_model <- rpart(individuals ~ ., data = train_tree, method = "anova")
+
+# Step 4: Plot the tree
+rpart.plot(tree_model, main = "Regression Tree for Displacement")
+
+# Step 5: Predict on test set
+tree_pred <- predict(tree_model, newdata = test_tree)
+
+# Step 6: Evaluate performance
+rmse_tree <- sqrt(mean((tree_pred - test_tree$individuals)^2))
+cat("Test RMSE (Regression Tree):", round(rmse_tree, 2), "\n")
+```
+
+
+The regression tree for displacement reveals that future conflict intensity and past civilian targeting are key predictors of population movement. The model first splits on whether the number of conflicts expected in three time units (nconflicts_lead3) is below 17; when it is, predicted displacement remains low at approximately 20,000 individuals, covering 34% of cases. However, when future conflict is high (nconflicts_lead3 ≥ 17), the model further divides based on the degree of civilian targeting six time units earlier (civilian_targeting_lag6). In areas with high anticipated conflict but low historical targeting, displacement is moderate (~149,000), but if both conflict and past targeting are high, displacement spikes dramatically to around 500,000, even though this occurs in only 6% of cases. This structure highlights how compounded risk—escalating conflict combined with a legacy of targeted violence—can trigger extreme displacement, offering valuable insight for early warning and humanitarian response planning.
+
+```{r, echo = F}
+# Load libraries
+library(dplyr)
+library(caret)
+library(glmnet)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+
+# Step 1: Prepare your dataset
+df_model <- M23_laglead_imputed %>%
+  select(individuals, starts_with("nconflicts"), starts_with("fatalities"), starts_with("civilian_targeting")) %>%
+  na.omit()
+
+# Step 2: Train/test split (80/20)
+set.seed(42)
+train_idx <- createDataPartition(df_model$individuals, p = 0.8, list = FALSE)
+train_df <- df_model[train_idx, ]
+test_df <- df_model[-train_idx, ]
+
+### 🔸 MODEL 1: LASSO REGRESSION
+# Create matrices for glmnet
+X_train <- model.matrix(individuals ~ ., data = train_df)[, -1]
+y_train <- train_df$individuals
+X_test <- model.matrix(individuals ~ ., data = test_df)[, -1]
+y_test <- test_df$individuals
+
+# Fit LASSO
+lasso_cv <- cv.glmnet(X_train, y_train, alpha = 1)
+lasso_pred <- predict(lasso_cv, newx = X_test, s = "lambda.min")
+rmse_lasso <- sqrt(mean((lasso_pred - y_test)^2))
+
+### 🔸 MODEL 2: RANDOM FOREST
+rf_model <- randomForest(individuals ~ ., data = train_df, ntree = 500, importance = TRUE)
+rf_pred <- predict(rf_model, newdata = test_df)
+rmse_rf <- sqrt(mean((rf_pred - test_df$individuals)^2))
+
+### 🔸 MODEL 3: REGRESSION TREE
+tree_model <- rpart(individuals ~ ., data = train_df, method = "anova")
+tree_pred <- predict(tree_model, newdata = test_df)
+rmse_tree <- sqrt(mean((tree_pred - test_df$individuals)^2))
+
+### ✅ COMPARE RMSEs
+rmse_results <- data.frame(
+  Model = c("LASSO", "Random Forest", "Regression Tree"),
+  RMSE = c(rmse_lasso, rmse_rf, rmse_tree)
+)
+
+# Print results
+print(rmse_results)
+```
+
+
+
+```{r}
+# Optional: Visualize RMSE comparison
+ggplot(rmse_results, aes(x = reorder(Model, RMSE), y = RMSE, fill = Model)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Model Comparison: RMSE on Test Set",
+    y = "Root Mean Squared Error",
+    x = ""
+  ) +
+  theme_minimal(base_size = 13)
+
+```
+
+### 5-2-4. Model Interpretation
+
+The model comparison chart illustrates the predictive performance of three approaches—LASSO, Regression Tree, and Random Forest—using Root Mean Squared Error (RMSE) on a held-out test set. Among the models, Random Forest achieves the lowest RMSE, suggesting it captures complex nonlinear relationships and interactions between conflict and targeting variables more effectively than the others. The Regression Tree performs moderately, offering a balance between interpretability and predictive power by identifying key thresholds (e.g., future conflict counts and past civilian targeting). In contrast, LASSO regression, while sparse and interpretable, yields the highest RMSE, indicating its linear assumptions and feature penalization may have oversimplified the displacement dynamics. However, each model has limitations: LASSO may miss important nonlinear patterns; Regression Trees risk overfitting and provide unstable splits; and Random Forest, though accurate, is often considered a "black box" with limited interpretability. Therefore, model choice should be guided by the trade-off between accuracy and interpretability, depending on the policy or operational context.
+
+# 6. Conclusions
+
+## Descriptive Analysis 
+Between 2021 and 2025, civil conflict and internal displacement in the Democratic Republic of Congo—particularly in North Kivu—exhibited sharp temporal escalation and distinct spatial concentration. Conflict events surged following the resurgence of the M23 rebel group in late 2021, with a dramatic rise in activity from just 12 events in 2021 to over 500 per year in 2023 and 2024. While conflict intensity slightly declined in 2025, it remained far above pre-2022 levels, indicating persistent instability. Spatially, violence was highly concentrated along the Rwanda–DRC border, especially in the territories of Rutshuru and Masisi in North Kivu, with localized shifts over time—some areas like Masisi and Birambizo saw declines, while others like Kibua and Kirotshe experienced increases in conflict events.
+
+Displacement patterns mirrored these dynamics. Heatmaps of displacement origins and destinations show that people fled primarily from high-conflict zones in southern North Kivu, such as Mweso and Kibirizi, and moved inland toward relatively safer areas like Minova and Kalehe in South Kivu. The average monthly displacement travel distance was approximately 76 kilometers, though some movements reflected prolonged, multi-stage journeys—suggesting that displacement is not a singular event but a process of ongoing relocation. Demographically, the displaced population was predominantly composed of women and children, underscoring the acute vulnerabilities within affected communities. Together, these findings reveal that internal displacement during this period was driven by intense, localized conflict in North Kivu, resulting in widespread, gendered, and geographically patterned displacement toward neighboring, less-affected zones.
+
+## Predictive Analysis
+
+Using machine learning approaches, the analysis demonstrates that internal displacement at the subnational (health zone) level in the DRC can be meaningfully predicted based on past and anticipated conflict conditions. Among the models tested, Random Forest outperformed both LASSO and Regression Tree in terms of predictive accuracy, achieving the lowest Root Mean Squared Error on the test set. Variable importance analysis revealed that forward-looking indicators—such as the number of conflicts expected in the near future (nconflicts_lead3) and upcoming civilian targeting events—were strong predictors of displacement magnitude, underscoring the anticipatory nature of population responses to violence.
+
+The regression tree model, while less accurate, provided interpretable decision rules, showing that areas with more than 17 projected conflict events and a history of civilian targeting were at greatest risk of mass displacement—up to 500,000 individuals monthly in some cases. This threshold-based structure highlights how displacement is not linearly related to conflict but escalates dramatically when certain conditions are met. Overall, these findings confirm that machine learning models can capture the complex, nonlinear dynamics between conflict and forced migration, offering valuable tools for early warning systems and targeted humanitarian response.
+
+# 7. References 
+
+Al Jazeera. (2025, March 17). DR Congo and M23 rebels confirm participation in Angola peace talks. https://www.aljazeera.com/news/2025/3/17/dr-congo-and-m23-rebels-confirm-participation-in-angola-peace-talks
+
+Internal Displacement Monitoring Centre. (2025). M23 conflict caused nearly 3 out of every 4 displacements in the DRC this year. https://www.internal-displacement.org/expert-analysis/m23-conflict-caused-nearly-3-out-of-every-4-displacements-in-the-drc-this-year/
+
+Reuters. (2025, January 29). What is happening in Congo and why are M23 rebels fighting? https://www.reuters.com/world/africa/what-is-happening-congo-why-are-m23-rebels-fighting-2025-01-29/
